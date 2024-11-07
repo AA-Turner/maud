@@ -51,13 +51,11 @@ def test_basic(tmp_path):
 
         } // namespace baz
 
-        /*
         /// e
-        enum Enum {
+        enum class SomeEnum {
           /// s
           SCOPED
         };
-        */
         """,
     )
     file_content = trike.comment_scan(path, clang_args=[])
@@ -132,6 +130,26 @@ def test_basic(tmp_path):
                 text=["/// rEVERSEpASCAL never caught on for some reason"],
             ),
         ),
+        (
+            "cpp:enum",
+            "SomeEnum",
+            "",
+            Comment(
+                path,
+                next_line=34,
+                text=["/// e"],
+            ),
+        ),
+        (
+            "cpp:enumerator",
+            "SCOPED",
+            "SomeEnum",
+            Comment(
+                path,
+                next_line=36,
+                text=["/// s"],
+            ),
+        ),
     ]
     assert file_content.floating_comments == [
         Comment(
@@ -202,32 +220,44 @@ def test_comment_from_tokens(tmp_path):
 
 
 def test_is_documentable():
-    assert trike.is_documentable(CursorKind.MACRO_DEFINITION)
-    assert trike.is_documentable(CursorKind.FUNCTION_DECL)
-    assert trike.is_documentable(CursorKind.FUNCTION_TEMPLATE)
-    assert trike.is_documentable(CursorKind.CLASS_TEMPLATE)
-    assert trike.is_documentable(CursorKind.STRUCT_DECL)
-    assert trike.is_documentable(CursorKind.CXX_METHOD)
-    assert trike.is_documentable(CursorKind.ENUM_DECL)
-    assert trike.is_documentable(CursorKind.ENUM_CONSTANT_DECL)
-    assert trike.is_documentable(CursorKind.FIELD_DECL)
-    assert trike.is_documentable(CursorKind.VAR_DECL)
-    assert trike.is_documentable(CursorKind.TYPEDEF_DECL)
-    assert trike.is_documentable(CursorKind.CONSTRUCTOR)
-    assert trike.is_documentable(CursorKind.CONCEPT_DECL)
+    assert trike.get_directive_name(CursorKind.MACRO_DEFINITION) == "c:macro"
 
-    # TODO maybe add these to the non-documented set
-    assert trike.is_documentable(CursorKind.USING_DECLARATION)
-    assert trike.is_documentable(CursorKind.USING_DIRECTIVE)
-    assert trike.is_documentable(CursorKind.FRIEND_DECL)
-    assert trike.is_documentable(CursorKind.TYPE_ALIAS_DECL)
-    assert trike.is_documentable(CursorKind.CXX_ACCESS_SPEC_DECL)
-
-    assert not trike.is_documentable(CursorKind.PREPROCESSING_DIRECTIVE)
-    assert not trike.is_documentable(CursorKind.UNEXPOSED_DECL)
-    assert not trike.is_documentable(CursorKind.STRING_LITERAL)
-    assert not trike.is_documentable(CursorKind.BLOCK_EXPR)
-    assert not trike.is_documentable(CursorKind.CXX_BASE_SPECIFIER)
+    for kind, directive in {
+        #
+        CursorKind.MACRO_DEFINITION: "c:macro",
+        #
+        CursorKind.FUNCTION_DECL: "cpp:function",
+        CursorKind.FUNCTION_TEMPLATE: "cpp:function",
+        CursorKind.CXX_METHOD: "cpp:function",
+        CursorKind.CONSTRUCTOR: "cpp:function",
+        #
+        CursorKind.CLASS_TEMPLATE: "cpp:struct",
+        CursorKind.STRUCT_DECL: "cpp:struct",
+        CursorKind.CLASS_DECL: "cpp:struct",
+        #
+        CursorKind.FIELD_DECL: "cpp:member",
+        #
+        CursorKind.VAR_DECL: "cpp:var",
+        #
+        CursorKind.ENUM_DECL: "cpp:enum",
+        CursorKind.ENUM_CONSTANT_DECL: "cpp:enumerator",
+        #
+        CursorKind.TYPEDEF_DECL: "cpp:type",
+        CursorKind.TYPE_ALIAS_DECL: "cpp:type",
+        #
+        CursorKind.CONCEPT_DECL: "cpp:concept",
+        #
+        CursorKind.USING_DECLARATION: "",  # using std::cout;
+        CursorKind.USING_DIRECTIVE: "",  # using namespace std;
+        CursorKind.FRIEND_DECL: "",
+        CursorKind.CXX_ACCESS_SPEC_DECL: "",
+        CursorKind.PREPROCESSING_DIRECTIVE: "",
+        CursorKind.UNEXPOSED_DECL: "",
+        CursorKind.STRING_LITERAL: "",
+        CursorKind.BLOCK_EXPR: "",
+        CursorKind.CXX_BASE_SPECIFIER: "",
+    }.items():
+        assert trike.get_directive_name(kind) == directive, f"{kind=}"
 
 
 def test_documentable_declaration(tmp_path):

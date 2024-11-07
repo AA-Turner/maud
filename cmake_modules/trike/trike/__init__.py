@@ -127,22 +127,58 @@ class FileContent:
     mtime_when_parsed: float
 
 
-def is_documentable(kind: CursorKind):
-    # TODO this should instead return the directive which we use
-    return (
-        kind == CursorKind.MACRO_DEFINITION
-        or kind.is_declaration()
-        and kind
-        not in {
-            CursorKind.NAMESPACE,
-            CursorKind.INVALID_FILE,
-            CursorKind.NAMESPACE_REF,
-            CursorKind.TEMPLATE_REF,
-            CursorKind.PREPROCESSING_DIRECTIVE,
-            CursorKind.MACRO_INSTANTIATION,
-            CursorKind.UNEXPOSED_DECL,
-        }
-    )
+def get_directive_name(kind: CursorKind) -> DirectiveName:
+    if kind == CursorKind.MACRO_DEFINITION:
+        return "c:macro"
+
+    if not kind.is_declaration() or kind in {
+        CursorKind.NAMESPACE,
+        CursorKind.INVALID_FILE,
+        CursorKind.NAMESPACE_REF,
+        CursorKind.TEMPLATE_REF,
+        CursorKind.PREPROCESSING_DIRECTIVE,
+        CursorKind.MACRO_INSTANTIATION,
+        CursorKind.UNEXPOSED_DECL,
+    }:
+        return ""
+
+    clang_cursor_kind = str(kind).removeprefix("CursorKind.")
+
+    if clang_cursor_kind == "FIELD_DECL":
+        return "cpp:member"
+
+    if clang_cursor_kind == "TYPEDEF_DECL" or "TYPE_ALIAS" in clang_cursor_kind:
+        return "cpp:type"
+
+    if "FUNCTION" in clang_cursor_kind or clang_cursor_kind in {
+        "CXX_METHOD",
+        "CONSTRUCTOR",
+        "DESTRUCTOR",
+    }:
+        return "cpp:function"
+
+    if "STRUCT" in clang_cursor_kind or "CLASS" in clang_cursor_kind:
+        # Classes and structs are stored together because libclang uses
+        # CLASS_TEMPLATE for struct templates. We decide whether to use
+        # cpp:struct or cpp:class based on the referencing directive.
+        return "cpp:struct"
+
+    if clang_cursor_kind == "ENUM_DECL":
+        # All enums are stored together because libclang does not surface the
+        # distinction between scoped/unscoped enums in `Cursor.kind`. We decide
+        # between cpp:enum{,-struct,-class} based on the referencing directive.
+        return "cpp:enum"
+
+    if clang_cursor_kind == "ENUM_CONSTANT_DECL":
+        return "cpp:enumerator"
+
+    if clang_cursor_kind == "CONCEPT_DECL":
+        return "cpp:concept"
+
+    if "VAR" in clang_cursor_kind:
+        return "cpp:var"
+
+    return ""
 
 
 def contiguous(first: Token | None, second: Token | None) -> bool:
@@ -185,50 +221,30 @@ def get_documentable_declaration(
             #
             #   struct Foo {
             #     enum Color { R, G, B };
-            #     /// The first token after this doccomment is the return type,
-            #     /// for which t.cursor corresponds to Foo rather than get_color.
+            #     /// The first token after this doccomment is the return type, for
+            #     /// which t.cursor corresponds to Foo::Color rather than get_color.
             #     Color get_color();
             #   };
             continue
 
-        if is_documentable(t.cursor.kind):
-            cursor = t.cursor
+        if directive := get_directive_name(t.cursor.kind):
             break
     else:
         return None
 
-    clang_cursor_kind = str(cursor.kind).removeprefix("CursorKind.")
-    if clang_cursor_kind == "MACRO_DEFINITION":
-        directive = "c:macro"
-    elif clang_cursor_kind == "FIELD_DECL":
-        directive = "cpp:member"
-    elif "TYPE_ALIAS" in clang_cursor_kind:
-        directive = "cpp:type"
-    elif "STRUCT" in clang_cursor_kind or "CLASS" in clang_cursor_kind:
-        # Classes and structs are stored together because libclang uses
-        # CLASS_TEMPLATE for struct templates. We decide whether to use
-        # cpp:struct or cpp:class based on the referencing directive.
-        directive = "cpp:struct"
-    elif "FUNCTION" in clang_cursor_kind or clang_cursor_kind == "CXX_METHOD":
-        directive = "cpp:function"
-    elif "VAR" in clang_cursor_kind:
-        directive = "cpp:var"
-    else:
-        logger.error(f"UNKNOWN decl kind {clang_cursor_kind}")
-        directive = ""
-
+    cursor = t.cursor
     cursor_tokens = cursor.get_tokens()
-    declaration = []
+    declaration_tokens = []
 
-    if cursor.kind == CursorKind.MACRO_DEFINITION:
+    if directive == "c:macro":
         name = next(cursor_tokens)
-        declaration.append(name)
+        declaration_tokens.append(name)
         if maybe_open_paren := next(cursor_tokens, None):
             if maybe_open_paren.spelling == "(" and contiguous(name, maybe_open_paren):
                 # function macro; include parameters
-                declaration.append(maybe_open_paren)
+                declaration_tokens.append(maybe_open_paren)
                 for t in cursor_tokens:
-                    declaration.append(t)
+                    declaration_tokens.append(t)
                     if t.spelling == ")":
                         break
 
@@ -250,23 +266,32 @@ def get_documentable_declaration(
                 # override the automatic declaration string.
                 break
 
-            if t.spelling in {"class", "struct", "export", "union", "using", "typedef"}:
+            if t.spelling in {
+                "class",
+                "struct",
+                "export",
+                "union",
+                "using",
+                "typedef",
+                "enum",
+                "concept",
+            }:
                 # sphinx decls do not include these; skip them
                 #
                 # Again, TECHNICALLY these could appear in a template argument *and*
                 # be syntactically necessary. Again, simplicity here seems preferable.
                 continue
 
-            declaration.append(t)
+            declaration_tokens.append(t)
 
-    # Advance tokens past what we've consumed here
-    next_line = declaration[-1].extent.end.line + 1
+    # Advance tokens past what we've consumed from the cursor
+    next_line = declaration_tokens[-1].extent.end.line + 1
     for t in tokens:
         if t.extent.end.line >= next_line:
             tokens.unget(t)
             break
 
-    return directive, join_tokens(declaration), cursor
+    return directive, join_tokens(declaration_tokens), cursor
 
 
 def comment_scan(path: Path, clang_args: list[str]) -> FileContent:
