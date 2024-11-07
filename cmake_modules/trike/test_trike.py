@@ -70,7 +70,6 @@ def test_basic(tmp_path):
                 path,
                 next_line=6,
                 text=["/// The entry point", "/// something clang-format would mangle"],
-                clang_cursor_kind="FUNCTION_DECL",
             ),
         ),
         (
@@ -81,7 +80,6 @@ def test_basic(tmp_path):
                 path,
                 next_line=14,
                 text=["/// expect doc"],
-                clang_cursor_kind="MACRO_DEFINITION",
             ),
         ),
         (
@@ -92,7 +90,6 @@ def test_basic(tmp_path):
                 path,
                 next_line=19,
                 text=["/// Metasyntactic value"],
-                clang_cursor_kind="STRUCT_DECL",
             ),
         ),
         (
@@ -103,7 +100,6 @@ def test_basic(tmp_path):
                 path,
                 next_line=21,
                 text=["/// four oopsies"],
-                clang_cursor_kind="FIELD_DECL",
             ),
         ),
         (
@@ -114,7 +110,6 @@ def test_basic(tmp_path):
                 path,
                 next_line=23,
                 text=["/// beyond available resources"],
-                clang_cursor_kind="FIELD_DECL",
             ),
         ),
         (
@@ -125,7 +120,6 @@ def test_basic(tmp_path):
                 path,
                 next_line=25,
                 text=["/// summed up"],
-                clang_cursor_kind="CXX_METHOD",
             ),
         ),
         (
@@ -136,7 +130,6 @@ def test_basic(tmp_path):
                 path,
                 next_line=29,
                 text=["/// rEVERSEpASCAL never caught on for some reason"],
-                clang_cursor_kind="TYPE_ALIAS_DECL",
             ),
         ),
     ]

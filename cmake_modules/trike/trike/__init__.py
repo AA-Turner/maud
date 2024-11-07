@@ -64,7 +64,6 @@ class Comment:
     file: Path
     next_line: int
     text: list[str]
-    clang_cursor_kind: str = ""
 
     @staticmethod
     def read_from_tokens(file: Path, tokens: Tokens) -> Self | None:
@@ -295,21 +294,19 @@ def comment_scan(path: Path, clang_args: list[str]) -> FileContent:
         explicitly_floating = t is None or t.extent.start.line > comment.next_line
         tokens.unget(t)
 
-        directive, argument, clang_cursor_kind = "", "", ""
+        directive, argument = "", ""
 
         if not explicitly_floating:
             if d := get_documentable_declaration(tokens):
                 directive, argument, cursor = d
                 sphinx_spelling[cursor.canonical.get_usr()] = argument
                 semantic_parents.append(cursor.semantic_parent)
-                clang_cursor_kind = str(cursor.kind).removeprefix("CursorKind.")
 
         if d := comment.get_explicit_directive():
             # explicit directives override those inferred from decls
             directive, argument = d
 
         if directive:
-            comment.clang_cursor_kind = clang_cursor_kind
             directives.append(directive)
             arguments.append(argument)
             comments.append(comment)
