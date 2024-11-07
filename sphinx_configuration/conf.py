@@ -82,7 +82,7 @@ trike_files = [
     *maud.cache.CMAKE_SOURCE_DIR.glob("cmake_modules/*.hxx"),
 ]
 # FIXME with c++20 libclang parses exported decls to UNEXPOSED_DECL
-trike_default_clang_args = ["-std=gnu++20", "-Dexport="]
+trike_clang_args = ["-std=gnu++20", "-Dexport="]
 
 
 def setup(app):

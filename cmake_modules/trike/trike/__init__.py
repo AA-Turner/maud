@@ -6,6 +6,7 @@ from pathlib import Path
 import sphinx.util.logging
 import docutils.parsers.rst.directives
 import difflib
+import multiprocessing
 
 from clang.cindex import (
     Cursor,
@@ -16,12 +17,11 @@ from clang.cindex import (
     TranslationUnit,
 )
 from sphinx.application import Sphinx
-from sphinx.environment import BuildEnvironment
 from sphinx.util.typing import ExtensionMetadata
 from sphinx.util.docutils import SphinxDirective
 from docutils.nodes import Node
 from docutils.statemachine import StringList
-from typing import Self, Sequence, Iterator
+from typing import Self, Sequence, Iterator, Mapping
 
 logger = sphinx.util.logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class Tokens:
         t, self._next = self._next, None
         return t or next(self.tokens)
 
-    def unget(self, t):
+    def unget(self, t) -> None:
         self._next = t
 
 
@@ -368,17 +368,19 @@ class State:
         tuple[DirectiveName, NamespaceName, ModuleName],
         dict[DirectiveArgument, Comment],
     ]
-    references: defaultdict[str, set[Path]]
     members: defaultdict[
         tuple[NamespaceName, ModuleName],
         dict[tuple[DirectiveName, DirectiveArgument], Comment],
     ]
 
     @staticmethod
-    def empty():
-        return State({}, defaultdict(dict), defaultdict(set), defaultdict(dict))
+    def empty() -> Self:
+        return State({}, defaultdict(dict), defaultdict(dict))
 
-    def add(self, path: Path, file_content: FileContent):
+    def is_stale(self, path: Path) -> bool:
+        return path.stat().st_mtime > self.files[path].mtime_when_parsed
+
+    def add(self, path: Path, file_content: FileContent) -> None:
         self.files[path] = file_content
 
         module = file_content.module
@@ -391,13 +393,7 @@ class State:
                 )
             self.members[namespace, module][directive, argument] = comment
 
-    def remove(self, path: Path):
-        invalidated = set()
-        # Every doc which references this /// source is invalidated
-        for docname, referenced_files in self.references.items():
-            if path in referenced_files:
-                invalidated.add(docname)
-
+    def remove(self, path: Path) -> None:
         # purge this file's ///s
         file_content = self.files.pop(path)
         module = file_content.module
@@ -405,10 +401,10 @@ class State:
             del self.directive_comments[directive, namespace, module][argument]
             if not self.directive_comments[directive, namespace, module]:
                 del self.directive_comments[directive, namespace, module]
+
             del self.members[namespace, module][directive, argument]
             if not self.members[namespace, module]:
                 del self.members[namespace, module]
-        return invalidated
 
     def get_comment(
         self,
@@ -434,58 +430,37 @@ class State:
         }
 
 
-def _env_get_outdated(
-    app: Sphinx,
-    env: BuildEnvironment,
-    _added: set[str],
-    _changed: set[str],
-    _removed: set[str],
-) -> set[str]:
-    logger.info("trike.State handled in env-get-outdated")
+def _builder_inited(app: Sphinx) -> None:
+    if not hasattr(app.env, "trike_state"):
+        app.env.trike_state = State.empty()
 
-    if not hasattr(env, "trike_state"):
-        env.trike_state = State.empty()
+    stored = set(app.env.trike_state.files.keys())
+    required = set(app.config.trike_files)
+    unnecessary = stored - required
+    new = required - stored
+    stale = {path for path in stored if app.env.trike_state.is_stale(path)}
+    removed = unnecessary | stale
+    scanned = list(new | stale)
 
-    # Even if foo.rst itself has not changed, if it referenced foo.hxx
-    # which *did* change then we must consider it outdated.
-    invalidated = set()
-    for path in [
-        path
-        for path, file_content in env.trike_state.files.items()
-        if path in app.config.trike_files
-        and file_content.mtime_when_parsed == path.stat().st_mtime
-    ]:
-        invalidated |= env.trike_state.remove(path)
+    for path in removed:
+        app.env.trike_state.remove(path)
 
-    for path in app.config.trike_files:
-        if path in env.trike_state.files:
-            # Anything outdated has already been purged
-            assert env.trike_state.files[path].mtime_when_parsed == path.stat().st_mtime
-            continue
-        clang_args = app.config.trike_clang_args.get(
-            path, app.config.trike_default_clang_args
-        )
-        env.trike_state.add(path, comment_scan(path, clang_args))
-    return invalidated
+    with multiprocessing.Pool(app.parallel) as pool:
+        futures = []
+        for path in scanned:
+            if isinstance(app.config.trike_clang_args, list):
+                clang_args = app.config.trike_clang_args
+            else:
+                clang_args = app.config.trike_clang_args.get(path, [])
 
+            if app.parallel > 1:
+                futures.append(pool.apply_async(comment_scan, [path, clang_args]))
+            else:
+                app.env.trike_state.add(path, comment_scan(path, clang_args))
 
-def _env_purge_doc(
-    _: Sphinx,
-    env: BuildEnvironment,
-    docname: str,
-):
-    if docname in env.trike_state.references:
-        del env.trike_state.references[docname]
-
-
-def _env_merge_info(
-    _: Sphinx,
-    env: BuildEnvironment,
-    subprocess_docnames: list[str],
-    subprocess_env: BuildEnvironment,
-):
-    for n in subprocess_docnames:
-        env.trike_state.references[n] |= subprocess_env.trike_state.references[n]
+        if futures:
+            for path, future in zip(scanned, futures):
+                app.env.trike_state.add(path, future.get())
 
 
 class PutDirective(SphinxDirective):
@@ -524,8 +499,7 @@ class PutDirective(SphinxDirective):
             directive, argument, namespace, module
         )
         if comment is not None:
-            self.env.trike_state.references[self.env.docname].add(comment.file)
-            logger.debug(f"{comment.file} referenced by {self.env.docname}")
+            self.env.note_dependency(comment.file)
 
             text = []
             text.extend(comment.with_directive(directive, argument))
@@ -542,7 +516,7 @@ class PutDirective(SphinxDirective):
             # a /// fails to parse; I'm not sure what's wrong with the below
             text = StringList(text, f"{comment.file}:{comment.first_line}:<trike>")
             with self.cpp(), sphinx.util.docutils.switch_source_input(self.state, text):
-                return self.parse_text_to_nodes(text)
+                return self.parse_text_to_nodes(text)  # type: ignore
 
         message = f"found no declaration matching `{argument}`\n"
         message += f"{directive=} {namespace=} {module=}"
@@ -559,25 +533,19 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         "trike_files",
         [],
         "env",
+        types=[list[Path]],
         description="All files which will be scanned for ///",
     )
 
     app.add_config_value(
-        "trike_default_clang_args",
+        "trike_clang_args",
         [],
         "env",
-        description="Arguments which will be passed to clang",
+        types=[list[str], Mapping[Path, str]],
+        description="Arguments which will be passed to clang (or per-file mapping)",
     )
-    app.add_config_value(
-        "trike_clang_args",
-        {},
-        "env",
-        description="Per-file overrides of arguments which will be passed to clang",
-    )
-    app.connect("env-get-outdated", _env_get_outdated)
-    app.connect("env-merge-info", _env_merge_info)
-    app.connect("env-purge-doc", _env_purge_doc)
 
+    app.connect("builder-inited", _builder_inited)
     app.add_directive("trike-put", PutDirective)
     # TODO trike-function etc as a shortcut for trike-put:: cpp:function
 
