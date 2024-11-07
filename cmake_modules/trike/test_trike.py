@@ -1,5 +1,6 @@
 from pathlib import Path
-from clang.cindex import CursorKind, Index
+from clang.cindex import TokenKind, CursorKind, Index
+import textwrap
 
 import trike
 from trike import (
@@ -11,7 +12,7 @@ from trike import (
 
 def make_tu(tmp_path, source, clang_args=[]):
     path = tmp_path / "source.cxx"
-    path.write_text(source)
+    path.write_text(textwrap.dedent(source))
     tu = Index.create().parse(str(path), args=clang_args, options=trike.PARSE_FLAGS)
     return tu, path
 
@@ -59,6 +60,7 @@ def test_basic(tmp_path):
         """,
     )
     file_content = trike.comment_scan(path, clang_args=[])
+    assert file_content.module == ""
     assert file_content.directive_comments == [
         (
             "cpp:function",
@@ -296,21 +298,24 @@ def test_whitespace(tmp_path):
 def test_modules(tmp_path):
     tu, _ = make_tu(
         tmp_path,
-        """
+        r"""
         module;
-        module foo;
+        [[some_attr({})]];
+        #define FOO \
+                0
+        #include <iostream>
+        #include "abracadabra.h"
+        export module foo.core:what;
         import bar;
+        int main() {}
         """,
         clang_args=["-std=gnu++20"],
     )
+    assert trike.get_module(tu) == "foo.core"
 
-    tokens = Tokens(tu)
-    for t in tokens:
-        if t.spelling == "module":
-            t = next(tokens)
-            if t.spelling != ";":
-                break
-    assert t.spelling == "foo"
+    path = Path(__file__).parent.parent / "test_.cxx"
+    tu = Index.create().parse(str(path), args=['-std=gnu++20', '-Dexport='], options=trike.PARSE_FLAGS)
+    assert trike.get_module(tu) == "test_"
 
 
 def test_test_hxx():

@@ -14,6 +14,8 @@ Zen
   We might need to overwrite cpp:namespace in order to support extended namespace spelling
   .. cpp:namespace:: Parameter : c4::yml::ConstNodeRef
 
+.. cpp:module:: maud_
+
 .. trike-put:: cpp:struct Parameter : c4::yml::ConstNodeRef
   :members:
 

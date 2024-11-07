@@ -108,7 +108,6 @@ class Comment:
             yield f"{indent}  {line}"
 
     def get_explicit_directive(self):
-        # FIXME don't mutate here
         if self.text[0].startswith("///.. "):
             directive, argument = self.text.pop(0).removeprefix("///.. ").split("::", 1)
             return directive.strip(), argument.strip()
@@ -125,6 +124,30 @@ class FileContent:
     ]
     clang_diagnostics: list[str]
     mtime_when_parsed: float
+
+
+def get_module(tu: TranslationUnit) -> str:
+    tokens = Tokens(tu)
+    for t in tokens:
+        if t.extent.start.column != 1:
+            # Note we're assuming sane formatting here for simplicity; we won't
+            # detect ``\t  module foo;``. That seems fine.
+            continue
+
+        if t.cursor.kind.is_declaration():
+            return ""
+
+        while t.spelling in {"export", "module"}:
+            t = next(tokens)
+
+        if t.spelling == ";":
+            continue
+
+        module = t.spelling
+        while next(tokens).spelling == ".":
+            module += "." + next(tokens).spelling
+        return module
+    return ""
 
 
 def get_directive_name(kind: CursorKind) -> DirectiveName:
@@ -233,6 +256,7 @@ def get_documentable_declaration(
         return None
 
     cursor = t.cursor
+    # FIXME handle cursor.is_anonymous
     cursor_tokens = cursor.get_tokens()
     declaration_tokens = []
 
@@ -296,9 +320,9 @@ def get_documentable_declaration(
 
 def comment_scan(path: Path, clang_args: list[str]) -> FileContent:
     tu = Index.create().parse(str(path), args=clang_args, options=PARSE_FLAGS)
-    tokens = Tokens(tu)
+    module = get_module(tu)
 
-    module = ""  # TODO detect modules
+    tokens = Tokens(tu)
 
     floating_comments = []
 
@@ -463,6 +487,16 @@ def _builder_inited(app: Sphinx) -> None:
                 app.env.trike_state.add(path, future.get())
 
 
+class CppModuleDirective(SphinxDirective):
+    has_content = False
+    required_arguments = 0
+    optional_arguments = 1
+
+    def run(self) -> list[Node]:
+        self.env.temp_data["cpp:module"] = self.arguments[0] if self.arguments else ""
+        return []
+
+
 class PutDirective(SphinxDirective):
     has_content = True
     required_arguments = 2
@@ -492,7 +526,6 @@ class PutDirective(SphinxDirective):
         argument = " ".join(filter(lambda arg: arg != "\\", self.arguments[1:]))
         namespace = self.env.temp_data.get("cpp:namespace_stack", [""])[-1]
         module = self.env.temp_data.get("cpp:module", "")
-        # TODO provide directive to set module
         with_members = "members" in self.options
 
         comment, close_matches = self.env.trike_state.get_comment(
@@ -548,6 +581,8 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     app.connect("builder-inited", _builder_inited)
     app.add_directive("trike-put", PutDirective)
     # TODO trike-function etc as a shortcut for trike-put:: cpp:function
+
+    app.add_directive_to_domain("cpp", "module", CppModuleDirective)
 
     logger.info("trike setup")
     return {

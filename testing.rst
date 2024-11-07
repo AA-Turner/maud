@@ -73,6 +73,8 @@ Unit test API
 
 .. trike-put:: c:macro SUITE_
 
+.. cpp:module:: test_
+
 .. trike-put:: cpp:class template <typename Match, \
                                    typename Describe, \
                                    typename DescribeNegation> \
