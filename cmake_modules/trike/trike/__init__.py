@@ -137,9 +137,12 @@ def get_module(tu: TranslationUnit) -> str:
         if t.cursor.kind.is_declaration():
             return ""
 
-        while t.spelling in {"export", "module"}:
+        if t.spelling == "export":
             t = next(tokens)
+        if t.spelling != "module":
+            continue
 
+        t = next(tokens)
         if t.spelling == ";":
             continue
 
