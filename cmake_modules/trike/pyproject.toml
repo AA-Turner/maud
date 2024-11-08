@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "trike"
 description = "Simple doc comments for C++"
-readme = "README.md"
+readme = "README.rst"
 version = "0.0.1"
 dependencies = [
   "libclang",
