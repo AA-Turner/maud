@@ -523,9 +523,18 @@ class PutDirective(SphinxDirective):
                 else:
                     self.env.temp_data[key] = value
 
+    def get_directive(self) -> tuple[str, str]:
+        arguments = list(self.arguments)
+        if self.name == "trike-put":
+            directive = arguments.pop(0)
+        elif self.name == "trike-macro":
+            directive = "c:macro"
+        else:
+            directive = "cpp:" + self.name.removeprefix("trike-")
+        return directive, " ".join(filter(lambda arg: arg != "\\", arguments))
+
     def run(self) -> list[Node]:
-        directive = self.arguments[0]
-        argument = " ".join(filter(lambda arg: arg != "\\", self.arguments[1:]))
+        directive, argument = self.get_directive()
         namespace = self.env.temp_data.get("cpp:namespace_stack", [""])[-1]
         module = self.env.temp_data.get("cpp:module", "")
         with_members = "members" in self.options
@@ -581,8 +590,22 @@ def setup(app: Sphinx) -> ExtensionMetadata:
     )
 
     app.connect("builder-inited", _builder_inited)
-    app.add_directive("trike-put", PutDirective)
-    # TODO trike-function etc as a shortcut for trike-put:: cpp:function
+    for name in [
+        "put",
+        "class",
+        "struct",
+        "function",
+        "member",
+        "var",
+        "type",
+        "enum",
+        "enum-struct",
+        "enum-class",
+        "enumerator",
+        "union",
+        "concept",
+    ]:
+        app.add_directive(f"trike-{name}", PutDirective)
 
     app.add_directive_to_domain("cpp", "module", CppModuleDirective)
 

@@ -16,7 +16,7 @@ Zen
 
 .. cpp:module:: maud_
 
-.. trike-put:: cpp:struct Parameter : c4::yml::ConstNodeRef
+.. trike-struct:: Parameter : c4::yml::ConstNodeRef
   :members:
 
   .. FIXME remove this when I figure out how to test sphinx better

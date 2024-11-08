@@ -67,18 +67,18 @@ specify resources which should be shared across the suite.
 Unit test API
 ~~~~~~~~~~~~~
 
-.. trike-put:: c:macro TEST_(case_name, parameters...)
+.. trike-macro:: TEST_(case_name, parameters...)
 
-.. trike-put:: c:macro EXPECT_(condition...)
+.. trike-macro:: EXPECT_(condition...)
 
-.. trike-put:: c:macro SUITE_
+.. trike-macro:: SUITE_
 
 .. cpp:module:: test_
 
-.. trike-put:: cpp:class template <typename Match, \
-                                   typename Describe, \
-                                   typename DescribeNegation> \
-               Matcher
+.. trike-class:: template <typename Match, \
+                           typename Describe, \
+                           typename DescribeNegation> \
+                 Matcher
 
 .. FIXME GTest is not easily includable yet
 
