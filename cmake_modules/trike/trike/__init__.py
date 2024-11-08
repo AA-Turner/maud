@@ -440,15 +440,14 @@ class State:
         namespace: NamespaceName = "",
         module: ModuleName = "",
     ) -> tuple[Comment | None, dict[DirectiveArgument, Comment]]:
-        comments = self.directive_comments.get(
-            (
-                directive if directive != "cpp:class" else "cpp:struct",
-                namespace,
-                module,
-            ),
-            {},
-        )
+        if directive == "cpp:class":
+            key_directive = "cpp:struct"
+        elif directive.startswith("cpp:enum-"):
+            key_directive = "cpp:enum"
+        else:
+            key_directive = directive
 
+        comments = self.directive_comments.get((key_directive, namespace, module), {})
         if comment := comments.get(argument, None):
             return comment, {}
 

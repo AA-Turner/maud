@@ -168,6 +168,15 @@ def test_basic(tmp_path):
     comment, _ = state.get_comment("cpp:function", "int main()")
     assert comment == file_content.directive_comments[0][-1]
 
+    # classes/structs are interchangeable on lookup
+    comment, _ = state.get_comment("cpp:struct", "Quux", "baz")
+    assert comment == file_content.directive_comments[2][-1]
+    comment, _ = state.get_comment("cpp:class", "Quux", "baz")
+    assert comment == file_content.directive_comments[2][-1]
+    # enum* are interchangeable on lookup
+    comment, _ = state.get_comment("cpp:enum-struct", "SomeEnum")
+    assert comment == file_content.directive_comments[7][-1]
+
     # ... and get a report of close matches when we make a typo
     comment, close_matches = state.get_comment("cpp:type", "CHAR=char", "baz")
     assert comment is None and "cHAR = char" in close_matches
