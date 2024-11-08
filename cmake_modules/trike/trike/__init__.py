@@ -127,11 +127,14 @@ class FileContent:
 
 
 def get_module(tu: TranslationUnit) -> str:
+    last_line = 0
     tokens = Tokens(tu)
     for t in tokens:
-        if t.extent.start.column != 1:
-            # Note we're assuming sane formatting here for simplicity; we won't
-            # detect ``\t  module foo;``. That seems fine.
+        if t.extent.start.line == last_line:
+            continue
+
+        last_line = t.extent.end.line
+        if t.kind == TokenKind.COMMENT:
             continue
 
         if t.cursor.kind.is_declaration():
@@ -230,7 +233,7 @@ def get_documentable_declaration(
 ) -> tuple[DirectiveName, DirectiveArgument, Cursor] | None:
     """
     Get a documentable declaration from a token stream, with
-    whitespace canonicalized to a single " "
+    whitespace canonicalized to a single " ".
     """
     if t := next(tokens, None):
         min_offset = t.extent.start.offset
@@ -322,6 +325,7 @@ def get_documentable_declaration(
 
 
 def comment_scan(path: Path, clang_args: list[str]) -> FileContent:
+    """Scan the C++ source at ``path`` for ///s"""
     tu = Index.create().parse(str(path), args=clang_args, options=PARSE_FLAGS)
     module = get_module(tu)
 
@@ -405,12 +409,15 @@ class State:
         return State({}, defaultdict(dict), defaultdict(dict))
 
     def is_stale(self, path: Path) -> bool:
+        "Returns True if `path` has been modified since it was last parsed."
         return path.stat().st_mtime > self.files[path].mtime_when_parsed
 
     def add(self, path: Path, file_content: FileContent) -> None:
+        "Add FileContent for a path, indexing directive comments"
         self.files[path] = file_content
 
         module = file_content.module
+
         for directive, argument, namespace, comment in file_content.directive_comments:
             comments = self.directive_comments[directive, namespace, module]
             stored = comments.setdefault(argument, comment)
@@ -421,9 +428,11 @@ class State:
             self.members[namespace, module][directive, argument] = comment
 
     def remove(self, path: Path) -> None:
-        # purge this file's ///s
+        "Remove FileContent for a path, cleaning up the directive comments index"
         file_content = self.files.pop(path)
+
         module = file_content.module
+
         for directive, argument, namespace, _ in file_content.directive_comments:
             del self.directive_comments[directive, namespace, module][argument]
             if not self.directive_comments[directive, namespace, module]:
@@ -433,13 +442,15 @@ class State:
             if not self.members[namespace, module]:
                 del self.members[namespace, module]
 
-    def get_comment(
+    def get_directive_comment(
         self,
         directive: DirectiveName,
         argument: DirectiveArgument,
         namespace: NamespaceName = "",
         module: ModuleName = "",
     ) -> tuple[Comment | None, dict[DirectiveArgument, Comment]]:
+        "Look up a directive comment."
+
         if directive == "cpp:class":
             key_directive = "cpp:struct"
         elif directive.startswith("cpp:enum-"):
@@ -490,6 +501,7 @@ def _builder_inited(app: Sphinx) -> None:
 
 
 class CppModuleDirective(SphinxDirective):
+    "Set (or unset) the current C++ module, similar to .. cpp:namespace::"
     has_content = False
     required_arguments = 0
     optional_arguments = 1
@@ -500,15 +512,21 @@ class CppModuleDirective(SphinxDirective):
 
 
 class PutDirective(SphinxDirective):
+    """
+    A directive which looks up a /// using its argument and the current
+    C++ namespace/module, then parses /// lines into nodes.
+    """
+
     has_content = True
-    required_arguments = 2
-    optional_arguments = 1000
+    required_arguments = 1
+    optional_arguments = 2**16
     option_spec = {
         "members": docutils.parsers.rst.directives.flag,
     }
 
     @contextmanager
     def cpp(self):
+        "Temporarily set the default language/domain to C++"
         tmp = {}
         tmp["highlight_language"] = self.env.temp_data.get("highlight_language", None)
         self.env.temp_data["highlight_language"] = "cpp"
@@ -524,6 +542,12 @@ class PutDirective(SphinxDirective):
                     self.env.temp_data[key] = value
 
     def get_directive(self) -> tuple[str, str]:
+        """
+        Extract the intended directive name and argument from the name and
+        arguments of this PutDirective. If this is a literal ``trike-put``,
+        we get the directive name from the first argument. Otherwise the
+        arguments are concatenated, normalizing whitespace to a single " ".
+        """
         arguments = list(self.arguments)
         if self.name == "trike-put":
             directive = arguments.pop(0)
@@ -539,7 +563,7 @@ class PutDirective(SphinxDirective):
         module = self.env.temp_data.get("cpp:module", "")
         with_members = "members" in self.options
 
-        comment, close_matches = self.env.trike_state.get_comment(
+        comment, close_matches = self.env.trike_state.get_directive_comment(
             directive, argument, namespace, module
         )
         if comment is not None:
@@ -609,7 +633,6 @@ def setup(app: Sphinx) -> ExtensionMetadata:
 
     app.add_directive_to_domain("cpp", "module", CppModuleDirective)
 
-    logger.info("trike setup")
     return {
         "version": "0.1",
         "env_version": 1,

@@ -165,20 +165,20 @@ def test_basic(tmp_path):
     state.add(path, file_content)
 
     # We can look comments with a directive up in State
-    comment, _ = state.get_comment("cpp:function", "int main()")
+    comment, _ = state.get_directive_comment("cpp:function", "int main()")
     assert comment == file_content.directive_comments[0][-1]
 
     # classes/structs are interchangeable on lookup
-    comment, _ = state.get_comment("cpp:struct", "Quux", "baz")
+    comment, _ = state.get_directive_comment("cpp:struct", "Quux", "baz")
     assert comment == file_content.directive_comments[2][-1]
-    comment, _ = state.get_comment("cpp:class", "Quux", "baz")
+    comment, _ = state.get_directive_comment("cpp:class", "Quux", "baz")
     assert comment == file_content.directive_comments[2][-1]
     # enum* are interchangeable on lookup
-    comment, _ = state.get_comment("cpp:enum-struct", "SomeEnum")
+    comment, _ = state.get_directive_comment("cpp:enum-struct", "SomeEnum")
     assert comment == file_content.directive_comments[7][-1]
 
     # ... and get a report of close matches when we make a typo
-    comment, close_matches = state.get_comment("cpp:type", "CHAR=char", "baz")
+    comment, close_matches = state.get_directive_comment("cpp:type", "CHAR=char", "baz")
     assert comment is None and "cHAR = char" in close_matches
 
     # ... and we can look up all members of a namespace
@@ -323,7 +323,9 @@ def test_modules(tmp_path):
     assert trike.get_module(tu) == "foo.core"
 
     path = Path(__file__).parent.parent / "test_.cxx"
-    tu = Index.create().parse(str(path), args=['-std=gnu++20', '-Dexport='], options=trike.PARSE_FLAGS)
+    tu = Index.create().parse(
+        str(path), args=["-std=gnu++20", "-Dexport="], options=trike.PARSE_FLAGS
+    )
     assert trike.get_module(tu) == "test_"
 
 
