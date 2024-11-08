@@ -639,6 +639,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         "enumerator",
         "union",
         "concept",
+        "macro",
     ]:
         app.add_directive(f"trike-{name}", PutDirective)
 
