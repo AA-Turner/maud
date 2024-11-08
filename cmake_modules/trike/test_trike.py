@@ -88,7 +88,7 @@ def test_basic(tmp_path):
             Comment(
                 path,
                 next_line=14,
-                text=["/// expect doc"],
+                text=["///.. c:macro:: EXPECT_(condition...)", "/// expect doc"],
             ),
         ),
         (
