@@ -4,6 +4,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import sphinx.util.logging
+import sphinx.addnodes
+import docutils.nodes
 import docutils.parsers.rst.directives
 import difflib
 import multiprocessing
@@ -97,21 +99,12 @@ class Comment:
 
     @property
     def stripped_text(self) -> list[str]:
-        return [line[len(Comment.PREFIX) + 1 :] for line in self.text]
+        return [line[len(Comment.PREFIX) :] for line in self.text]
 
-    def with_directive(
-        self, directive: str, argument: str, indent: str = ""
-    ) -> Iterator[str]:
-        yield ""
-        yield f"{indent}.. {directive}:: {argument}"
-        # TODO add a link to the decl on GitHub
-        yield ""
-        for line in self.stripped_text:
-            yield f"{indent}  {line}"
-
-    def get_explicit_directive(self):
+    @property
+    def explicit_directive(self) -> tuple[str, str] | None:
         if self.text[0].startswith("///.. "):
-            directive, argument = self.text.pop(0).removeprefix("///.. ").split("::", 1)
+            directive, argument = self.text[0].removeprefix("///.. ").split("::", 1)
             return directive.strip(), argument.strip()
 
 
@@ -360,7 +353,7 @@ def comment_scan(path: Path, clang_args: list[str]) -> FileContent:
                 sphinx_spelling[cursor.canonical.get_usr()] = argument
                 semantic_parents.append(cursor.semantic_parent)
 
-        if d := comment.get_explicit_directive():
+        if d := comment.explicit_directive:
             # explicit directives override those inferred from decls
             directive, argument = d
 
@@ -568,34 +561,78 @@ class PutDirective(SphinxDirective):
             directive = "cpp:" + self.name.removeprefix("trike-")
         return directive, " ".join(filter(lambda arg: arg != "\\", arguments))
 
+    def parse_comment_to_nodes(
+        self,
+        comment: Comment,
+        directive: DirectiveName,
+        argument: DirectiveArgument,
+        namespace: NamespaceName,
+        module: ModuleName,
+        with_members: bool = True,
+        before_members: list[Node] = [],
+    ) -> list[Node]:
+        if comment.explicit_directive:
+            text = comment.stripped_text
+        else:
+            text = [f".. {directive}:: {argument}", "", *comment.stripped_text]
+        nodes = self.parse_text_to_nodes(StringList(text))  # type: ignore
+
+        get_uri = self.config.trike_get_uri or (lambda file, line: None)
+        if uri := get_uri(comment.file, comment.next_line):
+            link = docutils.nodes.inline("", "[source]", classes=["viewcode-link"])
+            ref = docutils.nodes.reference("", "", link, internal=False, refuri=uri)
+            for node in nodes:
+                if s := next(node.findall(sphinx.addnodes.desc_signature), None):
+                    s += ref
+                    break
+
+        if not with_members:
+            return nodes + before_members
+
+        for node in nodes:
+            if content := next(node.findall(sphinx.addnodes.desc_content), None):
+                break
+        else:
+            return nodes + before_members
+
+        content.extend(before_members)
+
+        member_namespace = (namespace and namespace + "::") + argument
+        members = self.env.trike_state.members[member_namespace, module]
+
+        for (directive, argument), comment in members.items():
+            member_nodes = self.parse_comment_to_nodes(
+                comment, directive, argument, member_namespace, module
+            )
+            content.extend(member_nodes)
+
+        return nodes
+
     def run(self) -> list[Node]:
         directive, argument = self.get_directive()
+
         namespace = self.env.temp_data.get("cpp:namespace_stack", [""])[-1]
         module = self.env.temp_data.get("cpp:module", "")
-        with_members = "members" in self.options
 
         comment, close_matches = self.env.trike_state.get_directive_comment(
             directive, argument, namespace, module
         )
         if comment is not None:
             self.env.note_dependency(comment.file)
-
-            text = []
-            text.extend(comment.with_directive(directive, argument))
-            text.append("")
-            text.extend(f"  {line}" for line in self.content)
-
-            if with_members:
-                member_namespace = (namespace and namespace + "::") + argument
-                members = self.env.trike_state.members[member_namespace, module]
-                for (directive, argument), comment in members.items():
-                    text.extend(comment.with_directive(directive, argument, "  "))
-
             # FIXME "test_.hxx:73:<trike>" should appear in the sphinx error log if
             # a /// fails to parse; I'm not sure what's wrong with the below
-            text = StringList(text, f"{comment.file}:{comment.first_line}:<trike>")
-            with self.cpp(), sphinx.util.docutils.switch_source_input(self.state, text):
-                return self.parse_text_to_nodes(text)  # type: ignore
+            # text = StringList(text, f"{comment.file}:{comment.first_line}:<trike>")
+            # , sphinx.util.docutils.switch_source_input(self.state, text):
+            with self.cpp():
+                return self.parse_comment_to_nodes(
+                    comment,
+                    directive,
+                    argument,
+                    namespace,
+                    module,
+                    with_members="members" in self.options,
+                    before_members=self.parse_content_to_nodes(),
+                )
 
         message = f"found no declaration matching `{argument}`\n"
         message += f"{directive=} {namespace=} {module=}"
@@ -613,7 +650,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         [],
         "env",
         types=[list[Path]],
-        description="All files which will be scanned for ///",
+        description="All C++ sources which will be scanned for ///",
     )
 
     app.add_config_value(
@@ -622,6 +659,14 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         "env",
         types=[list[str], Mapping[Path, str]],
         description="Arguments which will be passed to clang (or per-file mapping)",
+    )
+
+    # FIXME silence the warning when a function is provided; we don't need to pickle that
+    app.add_config_value(
+        "trike_get_uri",
+        None,
+        "env",
+        description="A mapping from scanned C++ source to uri",
     )
 
     app.connect("builder-inited", _builder_inited)
@@ -644,7 +689,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         app.add_directive(f"trike-{name}", PutDirective)
 
     app.add_directive_to_domain("cpp", "module", CppModuleDirective)
-    #app.add_directive("trike-literate-include", LiterateIncludeDirective)
+    # app.add_directive("trike-literate-include", LiterateIncludeDirective)
 
     return {
         "version": "0.1",

@@ -19,4 +19,4 @@ Zen
 .. trike-struct:: Parameter : c4::yml::ConstNodeRef
   :members:
 
-  .. FIXME remove this when I figure out how to test sphinx better
+  FIXME remove this when I figure out how to test sphinx better

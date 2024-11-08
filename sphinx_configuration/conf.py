@@ -17,7 +17,7 @@ import maud
 logger = sphinx.util.logging.getLogger(__name__)
 
 project = maud.cache.PROJECT_NAME
-extensions = ['maud', 'trike']
+extensions = ["maud", "trike"]
 templates_path = []
 exclude_patterns = ["CMAKE_SOURCE_DIR", "Thumbs.db", ".DS_Store"]
 html_static_path = []
@@ -72,7 +72,7 @@ extlinks = {
     # TODO this should be intersphinx instead
     "cmake": ("https://cmake.org/cmake/help/latest/%s", None),
     "gtest": ("https://google.github.io/googletest/%s", None),
-    "sphinx": ("https://www.sphinx-doc.org/en/master/usage/%s", None)
+    "sphinx": ("https://www.sphinx-doc.org/en/master/usage/%s", None),
 }
 
 # TODO get trike files from cmake
@@ -83,6 +83,12 @@ trike_files = [
 ]
 # FIXME with c++20 libclang parses exported decls to UNEXPOSED_DECL
 trike_clang_args = ["-std=gnu++20", "-Dexport="]
+
+
+def trike_get_uri(file, line):
+    # FIXME what if file was generated?
+    relative = file.relative_to(maud.cache.CMAKE_SOURCE_DIR)
+    return f"https://github.com/bkietz/maud/blob/trunk/{relative}#L{line}"
 
 
 def setup(app):
