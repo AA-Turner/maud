@@ -75,6 +75,8 @@ class Comment:
 
         comment = Comment(file, t.extent.end.line + 1, [t.spelling])
         for t in tokens:
+            if t.spelling == "#":
+                t = next(tokens)
             if t.kind != TokenKind.COMMENT or t.extent.start.line > comment.next_line:
                 tokens.unget(t)
                 break
@@ -511,6 +513,15 @@ class CppModuleDirective(SphinxDirective):
         return []
 
 
+class LiterateIncludeerateIncludeDirective(SphinxDirective):
+    "Include source files, interpreting floating /// as prose between code blocks"
+    has_content = False
+    required_arguments = 1
+
+    def run(self) -> list[Node]:
+        return []
+
+
 class PutDirective(SphinxDirective):
     """
     A directive which looks up a /// using its argument and the current
@@ -632,6 +643,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         app.add_directive(f"trike-{name}", PutDirective)
 
     app.add_directive_to_domain("cpp", "module", CppModuleDirective)
+    #app.add_directive("trike-literate-include", LiterateIncludeDirective)
 
     return {
         "version": "0.1",

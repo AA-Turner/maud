@@ -57,6 +57,15 @@ def test_basic(tmp_path):
           /// s
           SCOPED
         };
+
+        void foo() {
+          int a;
+
+        #/// floating but zeroes
+        #/// indentation
+
+          (void)a;
+        }
         """,
     )
     file_content = trike.comment_scan(path, clang_args=[])
@@ -158,6 +167,11 @@ def test_basic(tmp_path):
             path,
             next_line=11,
             text=["/// floating something"],
+        ),
+        Comment(
+            path,
+            next_line=44,
+            text=["/// floating but zeroes", "/// indentation"],
         ),
     ]
 
