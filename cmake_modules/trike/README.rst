@@ -38,37 +38,6 @@ they can be as expressive as the rest of your documentation. Of particular
 note for those who have used other apidoc systems: cross references from
 ``///`` comments to labels defined in `*.rst` (or other ``///``) will just work.
 
-
-Configuration
--------------
-
-Minimally, add ``trike`` to your extensions list and enumerate
-the C++ sources which should be parsed for ``///``:
-
-``conf.py``
-    .. code-block:: python
-
-      extensions = ["trike"]
-      trike_files = list(Path("src").glob("**/*.hxx"))
-
-Optionally, the compile options which should be passed to ``libclang``
-when parsing can be passed as a list of strings. If the compile options
-required by your C++ sources are not uniform, a mapping can be specified
-instead of a single list:
-
-``conf.py``
-    .. code-block:: python
-
-      # default: no arguments will be passed to libclang
-
-      # this list will be passed to libclang for all C++ sources
-      trike_clang_args = ["-std=c++23"]
-
-      # use C++23 for most files, but override for special_case.cxx
-      trike_clang_args = defaultdict(lambda: ["-std=c++23"])
-      trike_clang_args[Path("special_case.cxx")] = ["-std=c++11", "-DFOO=1"]
-
-
 Usage
 -----
 
@@ -158,6 +127,46 @@ The macro will now be referencable as ``ASSERT(condition...)`` (Lookup of
 be unchanged. In order to be recognized, the explicit directive must be the
 first line of the ``///``, and there must be no space in the prefix ``///..``
 
+Configuration
+-------------
+
+Minimally, add ``trike`` to your extensions list and enumerate
+the C++ sources which should be parsed for ``///``:
+
+``conf.py``
+    .. code-block:: python
+
+      extensions = ["trike"]
+      trike_files = list(Path("src").glob("**/*.hxx"))
+
+If a function is provided which maps C++ file/lines to URIs, it will be
+used to produce links to the source of any ``///`` referenced by
+:rst:dir:`trike-put`, in the style of
+`linkcode. <https://www.sphinx-doc.org/en/master/usage/extensions/linkcode.html>`_
+
+``conf.py``
+    .. code-block:: python
+
+      def trike_get_uri(file: Path, line: int) -> str:
+          return f"https://my.src/{file.relative_to(REPO)}#L{line}"
+
+Optionally, the compile options which should be passed to ``libclang``
+when parsing can be passed as a list of strings. If the compile options
+required by your C++ sources are not uniform, a mapping can be specified
+instead of a single list:
+
+``conf.py``
+    .. code-block:: python
+
+      # default: no arguments will be passed to libclang
+
+      # this list will be passed to libclang for all C++ sources
+      trike_clang_args = ["-std=c++23"]
+
+      # use C++23 for most files, but override for special_case.cxx
+      trike_clang_args = defaultdict(lambda: ["-std=c++23"])
+      trike_clang_args[Path("special_case.cxx")] = ["-std=c++11", "-DFOO=1"]
+
 .. seealso::
 
   `Hawkmoth <https://jnikula.github.io/hawkmoth/stable>`_
@@ -170,13 +179,17 @@ first line of the ``///``, and there must be no space in the prefix ``///..``
       emphasizes C++ support, predictability of declaration strings, and
       easy override with explicit directives when necessary.
 
+  `Doxygen <https://www.doxygen.nl>`_
+      The best known apidoc system for C++.
+
   `Breathe <https://www.breathe-doc.org>`_
       A Sphinx extension which provides directives for accessing
-      `Doxygen's <https://www.doxygen.nl>`_ XML output. Doxygen is robust and
+      Doxygen's XML output. Doxygen is robust and
       well understood, but represents an extra hurdle in building your docs.
 
   `Autodoc2 <https://sphinx-autodoc2.readthedocs.io>`_
-      Nothing to do with C++, but inspirational in its simplicity.
+      A rewrite of ``autodoc``, the archetypal apidoc integration for Sphinx.
+      Nothing to do with C++, but inspirational in its excellence and simplicity.
 
   `clang-doc <https://clang.llvm.org/extra/clang-doc.html>`_
       A tool for extracting documentation from C++ source;

@@ -17,44 +17,133 @@ def make_tu(tmp_path, source, clang_args=[]):
     return tu, path
 
 
+def get_inline_expectations(path):
+    """
+    It's trivial to parse a formatted source and extract the
+    text of each /// and its line number, as well as whether
+    it is floating or not. For directive comments in tests
+    which use this helper, we read the last three lines to
+    get the expected (directive, argument, namespace).
+    """
+    floating_comments = []
+    directive_comments = []
+
+    lines = path.read_text().splitlines()
+    lines = map(lambda line: line.strip().removeprefix("#"), lines)
+    lines = enumerate(lines, start=1)
+    for i, line in lines:
+        if not line.startswith("///"):
+            continue
+
+        text = [line]
+        for i, line in lines:
+            if not line.startswith("///"):
+                break
+            text.append(line)
+        else:
+            line = ""
+
+        comment = Comment(path, next_line=i, text=text)
+        if line == "":
+            floating_comments.append(comment)
+            continue
+
+        *_, directive, argument, namespace = comment.stripped_text
+        directive_comments.append((directive, argument, namespace, comment))
+
+    return floating_comments, directive_comments
+
+
 def test_basic(tmp_path):
     _, path = make_tu(
         tmp_path,
         """
-        /// The entry point
-        // clang-format off
-        /// something clang-format would mangle
-        // clang-format on
+        ///cpp:function
+        ///int main()
+        ///
         int main() {
             return 0
         }
 
-        /// floating something
+        namespace {
+        namespace very {
+        namespace {
+        namespace anonymous {
+        ///cpp:var
+        ///int STATIC
+        ///very::anonymous
+        int STATIC;
+        }}}}
+
+        ///.. cpp:enum-struct:: EmptyLies
+        ///
+        ///cpp:enum
+        ///EmptyLies
+        ///
+        enum {};
+
+        /// floating
+        /// something
 
         ///.. c:macro:: EXPECT_(condition...)
-        /// expect doc
+        ///
+        ///c:macro
+        ///EXPECT_(condition...)
+        ///
         #define EXPECT_(...) foo
 
         namespace baz {
 
-        /// Metasyntactic value
+        ///cpp:struct
+        ///Quux
+        ///baz
         struct Quux {
           /// four oopsies
+          ///cpp:member
+          ///int foo
+          ///baz::Quux
           int foo;
+
           /// beyond available resources
+          ///
+          ///cpp:member
+          ///int bar
+          ///baz::Quux
           int bar;
+
           /// summed up
+          ///
+          ///cpp:function
+          ///int foobar() const
+          ///baz::Quux
           int foobar() const { return foo + bar; }
         };
 
         /// rEVERSEpASCAL never caught on for some reason
+        ///
+        ///cpp:type
+        ///cHAR = char
+        ///baz
         using cHAR = char;
+
+        ///cpp:type
+        ///int iNT
+        ///baz
+        typedef int iNT;
 
         } // namespace baz
 
         /// e
+        ///
+        ///cpp:enum
+        ///SomeEnum
+        ///
         enum class SomeEnum {
           /// s
+          ///
+          ///cpp:enumerator
+          ///SCOPED
+          ///SomeEnum
           SCOPED
         };
 
@@ -68,128 +157,30 @@ def test_basic(tmp_path):
         }
         """,
     )
+
+    floating_comments, directive_comments = get_inline_expectations(path)
     file_content = trike.comment_scan(path, clang_args=[])
     assert file_content.module == ""
-    assert file_content.directive_comments == [
-        (
-            "cpp:function",
-            "int main()",
-            "",
-            Comment(
-                path,
-                next_line=6,
-                text=["/// The entry point", "/// something clang-format would mangle"],
-            ),
-        ),
-        (
-            "c:macro",
-            "EXPECT_(condition...)",
-            "",
-            Comment(
-                path,
-                next_line=14,
-                text=["///.. c:macro:: EXPECT_(condition...)", "/// expect doc"],
-            ),
-        ),
-        (
-            "cpp:struct",
-            "Quux",
-            "baz",
-            Comment(
-                path,
-                next_line=19,
-                text=["/// Metasyntactic value"],
-            ),
-        ),
-        (
-            "cpp:member",
-            "int foo",
-            "baz::Quux",
-            Comment(
-                path,
-                next_line=21,
-                text=["/// four oopsies"],
-            ),
-        ),
-        (
-            "cpp:member",
-            "int bar",
-            "baz::Quux",
-            Comment(
-                path,
-                next_line=23,
-                text=["/// beyond available resources"],
-            ),
-        ),
-        (
-            "cpp:function",
-            "int foobar() const",
-            "baz::Quux",
-            Comment(
-                path,
-                next_line=25,
-                text=["/// summed up"],
-            ),
-        ),
-        (
-            "cpp:type",
-            "cHAR = char",
-            "baz",
-            Comment(
-                path,
-                next_line=29,
-                text=["/// rEVERSEpASCAL never caught on for some reason"],
-            ),
-        ),
-        (
-            "cpp:enum",
-            "SomeEnum",
-            "",
-            Comment(
-                path,
-                next_line=34,
-                text=["/// e"],
-            ),
-        ),
-        (
-            "cpp:enumerator",
-            "SCOPED",
-            "SomeEnum",
-            Comment(
-                path,
-                next_line=36,
-                text=["/// s"],
-            ),
-        ),
-    ]
-    assert file_content.floating_comments == [
-        Comment(
-            path,
-            next_line=11,
-            text=["/// floating something"],
-        ),
-        Comment(
-            path,
-            next_line=44,
-            text=["/// floating but zeroes", "/// indentation"],
-        ),
-    ]
+    assert file_content.floating_comments == floating_comments
+    assert file_content.directive_comments == directive_comments
 
     state = State.empty()
     state.add(path, file_content)
 
+    just_comments = [comment for _, _, _, comment in file_content.directive_comments]
+
     # We can look comments with a directive up in State
     comment, _ = state.get_directive_comment("cpp:function", "int main()")
-    assert comment == file_content.directive_comments[0][-1]
+    assert comment in just_comments
 
     # classes/structs are interchangeable on lookup
     comment, _ = state.get_directive_comment("cpp:struct", "Quux", "baz")
-    assert comment == file_content.directive_comments[2][-1]
+    assert comment in just_comments
     comment, _ = state.get_directive_comment("cpp:class", "Quux", "baz")
-    assert comment == file_content.directive_comments[2][-1]
+    assert comment in just_comments
     # enum* are interchangeable on lookup
     comment, _ = state.get_directive_comment("cpp:enum-struct", "SomeEnum")
-    assert comment == file_content.directive_comments[7][-1]
+    assert comment in just_comments
 
     # ... and get a report of close matches when we make a typo
     comment, close_matches = state.get_directive_comment("cpp:type", "CHAR=char", "baz")
@@ -207,41 +198,36 @@ def test_basic(tmp_path):
     assert state == State.empty()
 
 
-def test_comment_from_tokens(tmp_path):
-    tu, path = make_tu(
+def test_dropping_non_triple(tmp_path):
+    _, path = make_tu(
         tmp_path,
         """
-        /// The entry point
+        /// Interleaved // are elided from the /// text
         // clang-format off
-        /// something clang-format would mangle
+        /// something clang-format would mangle like a long line with a url https://clang.llvm.org/docs/ClangFormatStyleOptions.html
         // clang-format on
-        int foo = 3;
-
-        /// Foo
-        /// Bar
+        int frobnicate();
         """,
     )
-
-    tokens = Tokens(tu)
-    comment = Comment.read_from_tokens(path, tokens)
-    assert comment is not None
-    assert comment.next_line == 6
-    assert comment.text == [
-        "/// The entry point",
-        "/// something clang-format would mangle",
+    file_content = trike.comment_scan(path, clang_args=[])
+    assert file_content.directive_comments == [
+        (
+            "cpp:function",
+            "int frobnicate()",
+            "",
+            Comment(
+                path,
+                next_line=6,
+                text=[
+                    "/// Interleaved // are elided from the /// text",
+                    (
+                        "/// something clang-format would mangle like a long line with a"
+                        " url https://clang.llvm.org/docs/ClangFormatStyleOptions.html"
+                    ),
+                ],
+            ),
+        ),
     ]
-    assert next(tokens).spelling == "int"
-
-    comment = Comment.read_from_tokens(path, tokens)
-    assert comment is not None
-    assert comment.next_line == 10
-    assert comment.text == [
-        "/// Foo",
-        "/// Bar",
-    ]
-
-    comment = Comment.read_from_tokens(path, tokens)
-    assert comment is None
 
 
 def test_is_documentable():
@@ -285,20 +271,49 @@ def test_is_documentable():
         assert trike.get_directive_name(kind) == directive, f"{kind=}"
 
 
-def test_documentable_declaration(tmp_path):
-    tu, _ = make_tu(
+def test_comment_from_tokens(tmp_path):
+    tu, path = make_tu(
         tmp_path,
         """
-        /// The entry point
+        /// Y
         // clang-format off
-        /// something clang-format would mangle
+        /// Z
         // clang-format on
         int foo = 3;
 
         /// Foo
-        // clang-format off
         /// Bar
+        """,
+    )
+
+    tokens = Tokens(tu)
+    comment = Comment.read_from_tokens(path, tokens)
+    assert comment is not None
+    assert comment.next_line == 6
+    assert comment.text == ["/// Y", "/// Z"]
+
+    assert next(tokens).spelling == "int"
+
+    comment = Comment.read_from_tokens(path, tokens)
+    assert comment is not None
+    assert comment.next_line == 10
+    assert comment.text == ["/// Foo", "/// Bar"]
+
+    assert Comment.read_from_tokens(path, tokens) is None
+
+
+def test_documentable_declaration(tmp_path):
+    tu, _ = make_tu(
+        tmp_path,
+        """
+        /// Y
+        // clang-format off
+        /// Z
         // clang-format on
+        int foo = 3;
+
+        /// Foo
+        /// Bar
         """,
     )
 

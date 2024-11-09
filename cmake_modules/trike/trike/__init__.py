@@ -8,6 +8,7 @@ import sphinx.addnodes
 import docutils.nodes
 import docutils.parsers.rst.directives
 import difflib
+import base64
 import multiprocessing
 
 from clang.cindex import (
@@ -105,7 +106,12 @@ class Comment:
     def explicit_directive(self) -> tuple[str, str] | None:
         if self.text[0].startswith("///.. "):
             directive, argument = self.text[0].removeprefix("///.. ").split("::", 1)
-            return directive.strip(), argument.strip()
+            directive, argument = directive.strip(), argument.strip()
+            if directive == "cpp:class":
+                directive = "cpp:struct"
+            elif directive.startswith("cpp:enum-"):
+                directive = "cpp:enum"
+            return directive, argument
 
 
 @dataclass
@@ -257,7 +263,6 @@ def get_documentable_declaration(
         return None
 
     cursor = t.cursor
-    # FIXME handle cursor.is_anonymous
     cursor_tokens = cursor.get_tokens()
     declaration_tokens = []
 
@@ -308,6 +313,9 @@ def get_documentable_declaration(
                 continue
 
             declaration_tokens.append(t)
+
+    if not declaration_tokens:
+        return directive, "", cursor
 
     # Advance tokens past what we've consumed from the cursor
     next_line = declaration_tokens[-1].extent.end.line + 1
@@ -372,8 +380,9 @@ def comment_scan(path: Path, clang_args: list[str]) -> FileContent:
         namespace = ""
         while p is not None and p != tu.cursor:
             parent_spelling = sphinx_spelling.get(p.canonical.get_usr(), p.spelling)
+            if parent_spelling:
+                namespace = f"{parent_spelling}::{namespace}"
             p = p.semantic_parent
-            namespace = f"{parent_spelling}::{namespace}"
         namespaces.append(namespace.removesuffix("::"))
 
     return FileContent(
