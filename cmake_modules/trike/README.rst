@@ -1,3 +1,9 @@
+.. image:: CMAKE_SOURCE_DIR/cmake_modules/trike/trike.png
+  :class: only-light
+
+.. image:: CMAKE_SOURCE_DIR/cmake_modules/trike/trike-dark.png
+  :class: only-dark
+
 Trike
 =====
 
