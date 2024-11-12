@@ -426,9 +426,9 @@ function(_maud_scan source_file)
       return()
     endif()
     if(COMMAND "maud_add_test")
-      maud_add_test("${source_file}" "${module}" "${partition}" target_name)
+      maud_add_test("${source_file}" target_name)
     else()
-      _maud_add_test("${source_file}" "${module}" "${partition}" target_name)
+      _maud_add_test("${source_file}" target_name)
     endif()
   endif()
 
@@ -506,7 +506,9 @@ function(_maud_scan source_file)
 endfunction()
 
 
-function(_maud_add_test source_file module partition out_target_name)
+function(_maud_add_test source_file out_target_name)
+  get_source_file_property(partition "${source_file}" MAUD_PARTITION)
+
   if(partition STREQUAL "main")
     if(_MAUD_TEST_MAIN)
       message(

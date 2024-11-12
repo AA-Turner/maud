@@ -31,7 +31,7 @@ scans of C++ sources.
     - If an interface unit of ``module test_:main`` is found then it will be linked
       with each test executable, otherwise ``gtest_main`` will be linked.
 
-  - If the command ``maud_add_test(source_file_path partition out_target_name)``
+  - If the command ``maud_add_test(source_file_path out_target_name)``
     is defined it will be invoked on each test source as it is scanned, allowing
     you to override what a unit test is for your project.
 

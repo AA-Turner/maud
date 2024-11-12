@@ -102,13 +102,56 @@ instead of ``GTest``), write an interface unit with
 
 .. code-block:: cmake
 
-  maud_add_test(source_file partition out_target_name)
+  maud_add_test(source_file out_target_name)
 
-If defined, each source file which declares ``module test_``
-or a partition of it will be passed to this function and
-added to the target it names. (See project test
-``custom unit testing`` for an example.)
+If defined, this function will be invoked on each source file which
+declares ``import test_``, ``module test_``, or any partition of it.
+If ``out_target_name`` is set to a
+:mastering-cmake:`target name <Key Concepts.html#targets>`,
+the source file will be attached to it and imports automatically
+processed as with other ``Maud`` targets. For example, if you would
+prefer to unit test with a minimal custom framework you could define
+your own ``module test_``:
 
+``.test_.cxx``
+    .. code-block:: c++
+
+      module;
+      #include "my_test_framework.hxx"
+      export module test_;
+      export using my_test_framework::expect_equals;
+      // ...
+
+Then inject this into unit tests by defining ``maud_add_test``:
+
+``test_.cmake``
+    .. code-block:: cmake
+
+      function(maud_add_test source_file out_target_name)
+        cmake_path(GET source_file STEM name)
+        set(${out_target_name} "test_.${name}" PARENT_SCOPE)
+
+        # Create a test executable and register it
+        add_executable(test_.${name})
+        add_test(NAME test_.${name} COMMAND $<TARGET_FILE:test_.${name}>)
+
+        # Link the unit test with test_.cxx:
+        target_sources(
+          test_.${name}
+          PRIVATE FILE_SET module_providers TYPE CXX_MODULES
+          BASE_DIRS ${CMAKE_SOURCE_DIR} FILES .test_.cxx
+        )
+      endfunction()
+
+Then this could be used in a unit test:
+
+``math.test.cxx``
+    .. code-block:: c++
+
+      import test_;
+      int main() {
+        expect_equals(1 + 2, 3);
+      }
 
 Formatting test
 ~~~~~~~~~~~~~~~

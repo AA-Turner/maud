@@ -294,6 +294,10 @@ def get_documentable_declaration(
                 # However this doesn't seem critical to support, particularly since
                 # if these constructions are necessary it should be sufficient to
                 # override the automatic declaration string.
+                #
+                # FIXME at least we should track depth of []{}() and only terminate
+                # when depth == 0. Otherwise we'll lose default arguments which
+                # include an initializer list.
                 break
 
             if t.spelling in {
