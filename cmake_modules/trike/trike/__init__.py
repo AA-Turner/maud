@@ -247,14 +247,12 @@ def get_documentable_declaration(
             # Some of the tokens captured by Clang might be associated with a declaration
             # which *encloses* the decl of interest. For example:
             #
-            # .. code-block:: c++
-            #
-            #   struct Foo {
-            #     enum Color { R, G, B };
-            #     /// The first token after this doccomment is the return type, for
-            #     /// which t.cursor corresponds to Foo::Color rather than get_color.
-            #     Color get_color();
-            #   };
+            #     struct Foo {
+            #       enum Color { R, G, B };
+            #       /// The first token after this doccomment is the return type, for
+            #       /// which t.cursor corresponds to Foo::Color rather than get_color.
+            #       Color get_color();
+            #     };
             continue
 
         if directive := get_directive_name(t.cursor.kind):
@@ -265,6 +263,7 @@ def get_documentable_declaration(
     cursor = t.cursor
     cursor_tokens = cursor.get_tokens()
     declaration_tokens = []
+    depth = 0
 
     if directive == "c:macro":
         name = next(cursor_tokens)
@@ -280,24 +279,14 @@ def get_documentable_declaration(
 
     else:
         for t in cursor_tokens:
-            if t.spelling in "{;":
-                # TECHNICALLY these could occur in an attribute or lambda expression:
+            if depth == 0 and t.spelling in "{;":
+                # TECHNICALLY these could occur, for example in a lambda expression:
                 #
-                # .. code-block:: c++
+                #     /// we only see "IDENTITY = [](auto self)"
+                #     auto IDENTITY = [](auto self) { return self; };
                 #
-                #   /// we only see "IDENTITY = [](auto self)"
-                #   auto IDENTITY = [](auto self) { return self; };
-                #
-                #   /// we only see "[[preconditions"
-                #   [[preconditions{ this->foo == 3 }]] int Foo::get_three() const
-                #
-                # However this doesn't seem critical to support, particularly since
-                # if these constructions are necessary it should be sufficient to
-                # override the automatic declaration string.
-                #
-                # FIXME at least we should track depth of []{}() and only terminate
-                # when depth == 0. Otherwise we'll lose default arguments which
-                # include an initializer list.
+                # However this doesn't seem critical to support; if necessary it should
+                # be sufficient to override the automatic declaration string.
                 break
 
             if t.spelling in {
@@ -312,11 +301,17 @@ def get_documentable_declaration(
             }:
                 # sphinx decls do not include these; skip them
                 #
-                # Again, TECHNICALLY these could appear in a template argument *and*
+                # Again, TECHNICALLY some of these could appear in a template argument and
                 # be syntactically necessary. Again, simplicity here seems preferable.
                 continue
 
             declaration_tokens.append(t)
+            if t.spelling in "{([":
+                depth += 1
+            elif t.spelling in "])}":
+                depth -= 1
+            if depth != 0:
+                print(join_tokens(declaration_tokens), [str(d) for d in cursor.translation_unit.diagnostics])
 
     if not declaration_tokens:
         return directive, "", cursor

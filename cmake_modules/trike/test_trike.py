@@ -75,10 +75,10 @@ def test_basic(tmp_path):
         int STATIC;
         }}}}
 
-        ///.. cpp:enum-struct:: EmptyLies
+        ///.. cpp:enum-struct:: @EmptyLies
         ///
         ///cpp:enum
-        ///EmptyLies
+        ///@EmptyLies
         ///
         enum {};
 
@@ -118,6 +118,13 @@ def test_basic(tmp_path):
           ///baz::Quux
           int foobar() const { return foo + bar; }
         };
+
+        ///cpp:function
+        ///void handle [[preconditions{quux.bar != 0;}]] (Quux quux = {0, 1})
+        ///baz
+        void handle [[preconditions{quux.bar != 0;}]] (Quux quux = {0, 1}) {
+          return quux.foobar();
+        }
 
         /// rEVERSEpASCAL never caught on for some reason
         ///
