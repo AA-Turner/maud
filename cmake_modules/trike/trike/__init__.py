@@ -107,6 +107,7 @@ class Comment:
         if self.text[0].startswith("///.. "):
             directive, argument = self.text[0].removeprefix("///.. ").split("::", 1)
             directive, argument = directive.strip(), argument.strip()
+            argument = " ".join(a.strip() for a in argument.split("\\\n"))
             if directive == "cpp:class":
                 directive = "cpp:struct"
             elif directive.startswith("cpp:enum-"):
@@ -310,8 +311,6 @@ def get_documentable_declaration(
                 depth += 1
             elif t.spelling in "])}":
                 depth -= 1
-            if depth != 0:
-                print(join_tokens(declaration_tokens), [str(d) for d in cursor.translation_unit.diagnostics])
 
     if not declaration_tokens:
         return directive, "", cursor

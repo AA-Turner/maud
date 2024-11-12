@@ -237,6 +237,36 @@ def test_dropping_non_triple(tmp_path):
     ]
 
 
+def test_escaped_line_ending(tmp_path):
+    source = textwrap.dedent(
+        r"""
+    ///.. cpp:function:: template <typename A, \
+                                   typename B, \
+                                   typename C, \
+                                   typename D> \
+                         int score()
+    /// Long explicit directives may escape newlines with \.
+    /// Whitespace on either side will be collapsed to a single " ".
+    template <typename... T>
+    std::enable_if_t<impl<T...>, int> score();
+    """
+    )
+    _, path = make_tu(tmp_path, source)
+    file_content = trike.comment_scan(path, clang_args=[])
+    assert file_content.directive_comments == [
+        (
+            "cpp:function",
+            "template <typename A, typename B, typename C, typename D> int score()",
+            "",
+            Comment(
+                path,
+                next_line=9,
+                text=["\n".join(source.splitlines()[1:6]), *source.splitlines()[6:8]],
+            ),
+        ),
+    ]
+
+
 def test_is_documentable():
     assert trike.get_directive_name(CursorKind.MACRO_DEFINITION) == "c:macro"
 
