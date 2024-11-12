@@ -35,11 +35,11 @@ def get_inline_expectations(path):
         if not line.startswith("///"):
             continue
 
-        text = [line]
+        text = [line.removeprefix("///")]
         for i, line in lines:
             if not line.startswith("///"):
                 break
-            text.append(line)
+            text.append(line.removeprefix("///"))
         else:
             line = ""
 
@@ -48,7 +48,7 @@ def get_inline_expectations(path):
             floating_comments.append(comment)
             continue
 
-        *_, directive, argument, namespace = comment.stripped_text
+        *_, directive, argument, namespace = comment.text
         directive_comments.append((directive, argument, namespace, comment))
 
     return floating_comments, directive_comments
@@ -226,9 +226,9 @@ def test_dropping_non_triple(tmp_path):
                 path,
                 next_line=6,
                 text=[
-                    "/// Interleaved // are elided from the /// text",
+                    " Interleaved // are elided from the /// text",
                     (
-                        "/// something clang-format would mangle like a long line with a"
+                        " something clang-format would mangle like a long line with a"
                         " url https://clang.llvm.org/docs/ClangFormatStyleOptions.html"
                     ),
                 ],
@@ -261,7 +261,13 @@ def test_escaped_line_ending(tmp_path):
             Comment(
                 path,
                 next_line=9,
-                text=["\n".join(source.splitlines()[1:6]), *source.splitlines()[6:8]],
+                text=[
+                    line.removeprefix("///")
+                    for line in [
+                        "\n".join(source.splitlines()[1:6]),
+                        *source.splitlines()[6:8],
+                    ]
+                ],
             ),
         ),
     ]
@@ -327,14 +333,14 @@ def test_comment_from_tokens(tmp_path):
     comment = Comment.read_from_tokens(path, tokens)
     assert comment is not None
     assert comment.next_line == 6
-    assert comment.text == ["/// Y", "/// Z"]
+    assert comment.text == [" Y", " Z"]
 
     assert next(tokens).spelling == "int"
 
     comment = Comment.read_from_tokens(path, tokens)
     assert comment is not None
     assert comment.next_line == 10
-    assert comment.text == ["/// Foo", "/// Bar"]
+    assert comment.text == [" Foo", " Bar"]
 
     assert Comment.read_from_tokens(path, tokens) is None
 

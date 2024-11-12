@@ -8,7 +8,6 @@ import sphinx.addnodes
 import docutils.nodes
 import docutils.parsers.rst.directives
 import difflib
-import base64
 import multiprocessing
 
 from clang.cindex import (
@@ -24,7 +23,7 @@ from sphinx.util.typing import ExtensionMetadata
 from sphinx.util.docutils import SphinxDirective
 from docutils.nodes import Node
 from docutils.statemachine import StringList
-from typing import Self, Sequence, Iterator, Mapping
+from typing import Self, Sequence, Mapping
 
 logger = sphinx.util.logging.getLogger(__name__)
 
@@ -76,36 +75,31 @@ class Comment:
         else:
             return None
 
-        comment = Comment(file, t.extent.end.line + 1, [t.spelling])
+        next_line = t.extent.end.line
+        tokens.unget(t)
+        text = []
+
         for t in tokens:
             if t.spelling == "#":
                 t = next(tokens)
-            if t.kind != TokenKind.COMMENT or t.extent.start.line > comment.next_line:
+            if t.kind != TokenKind.COMMENT or t.extent.start.line > next_line:
                 tokens.unget(t)
                 break
-            comment.next_line = t.extent.end.line + 1
+            next_line = t.extent.end.line + 1
 
             if t.spelling.startswith(Comment.PREFIX):
-                comment.text.append(t.spelling)
+                text.append(t.spelling[len(Comment.PREFIX) :])
             elif t.spelling.startswith("/*"):
                 raise RuntimeError(
                     "/// interspersed with C-style comments are not supported"
                 )
 
-        return comment
-
-    @property
-    def first_line(self) -> int:
-        return self.next_line - len(self.text)
-
-    @property
-    def stripped_text(self) -> list[str]:
-        return [line[len(Comment.PREFIX) :] for line in self.text]
+        return Comment(file, next_line, text)
 
     @property
     def explicit_directive(self) -> tuple[str, str] | None:
-        if self.text[0].startswith("///.. "):
-            directive, argument = self.text[0].removeprefix("///.. ").split("::", 1)
+        if self.text[0].startswith(".. "):
+            directive, argument = self.text[0].removeprefix(".. ").split("::", 1)
             directive, argument = directive.strip(), argument.strip()
             argument = " ".join(a.strip() for a in argument.split("\\\n"))
             if directive == "cpp:class":
@@ -537,20 +531,20 @@ class PutDirective(SphinxDirective):
 
     @contextmanager
     def cpp(self):
-        "Temporarily set the default language/domain to C++"
-        tmp = {}
-        tmp["highlight_language"] = self.env.temp_data.get("highlight_language", None)
+        "Temporarily set the default domain/language to C++"
+        stashed = {
+            key: val
+            for key, val in self.env.temp_data.items()
+            if key in {"default_domain", "highlight_language"}
+        }
+        self.env.temp_data["default_domain"] = self.env.domains["cpp"]
         self.env.temp_data["highlight_language"] = "cpp"
-        tmp["default_domain"] = self.env.temp_data.get("default_domain", None)
-        self.env.temp_data["default_domain"] = self.env.domains.get("cpp")
         try:
             yield
         finally:
-            for key, value in tmp.items():
-                if value is None:
-                    del self.env.temp_data[key]
-                else:
-                    self.env.temp_data[key] = value
+            for key in stashed.keys():
+                del self.env.temp_data[key]
+            self.env.temp_data.update(stashed)
 
     def get_directive(self) -> tuple[str, str]:
         """
@@ -578,11 +572,17 @@ class PutDirective(SphinxDirective):
         with_members: bool = True,
         before_members: list[Node] = [],
     ) -> list[Node]:
-        if comment.explicit_directive:
-            text = comment.stripped_text
-        else:
-            text = [f".. {directive}:: {argument}", "", *comment.stripped_text]
-        nodes = self.parse_text_to_nodes(StringList(text))  # type: ignore
+        injected_directive = (
+            [] if comment.explicit_directive else [f".. {directive}:: {argument}", ""]
+        )
+        offset = comment.next_line - 1 - len(comment.text) - len(injected_directive)
+        text = injected_directive + comment.text
+        text = StringList(
+            text, items=[(str(comment.file), i + offset) for i in range(len(text))]
+        )
+
+        with sphinx.util.docutils.switch_source_input(self.state, text):
+            nodes = self.parse_text_to_nodes(text, offset=0)  # type: ignore
 
         get_uri = self.config.trike_get_uri or (lambda file, line: None)
         if uri := get_uri(comment.file, comment.next_line):
@@ -626,10 +626,6 @@ class PutDirective(SphinxDirective):
         )
         if comment is not None:
             self.env.note_dependency(comment.file)
-            # FIXME "test_.hxx:73:<trike>" should appear in the sphinx error log if
-            # a /// fails to parse; I'm not sure what's wrong with the below
-            # text = StringList(text, f"{comment.file}:{comment.first_line}:<trike>")
-            # , sphinx.util.docutils.switch_source_input(self.state, text):
             with self.cpp():
                 return self.parse_comment_to_nodes(
                     comment,
@@ -668,7 +664,7 @@ def setup(app: Sphinx) -> ExtensionMetadata:
         description="Arguments which will be passed to clang (or per-file mapping)",
     )
 
-    # FIXME silence the warning when a function is provided; we don't need to pickle that
+    # FIXME an unpickleable value causes the environment to *never* be reloadable
     app.add_config_value(
         "trike_get_uri",
         None,

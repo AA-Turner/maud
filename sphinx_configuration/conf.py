@@ -1,11 +1,7 @@
 import sphinx.util.docutils
 import sphinx.util.logging
-import docutils.nodes
-import docutils.statemachine
 import pygments.lexers.c_cpp
 import sphinx.highlighting
-import pathlib
-import json
 
 from pathlib import Path
 
