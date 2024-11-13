@@ -28,8 +28,6 @@ specify resources which should be shared across the suite.
 
   module test_;
 
-  SUITE_ { std::string yo = "yo"; };
-
   TEST_(basic) {
     int three = 3, five = 5;
     EXPECT_(three == five);
@@ -46,8 +44,6 @@ specify resources which should be shared across the suite.
     EXPECT_(&three != nullptr) or [](std::ostream &os) {
       // A lambda can hook expectation failure and add more context
     };
-
-    EXPECT_(suite_state()->yo == "yo");
 
     // GMock's matchers are available
     EXPECT_("hello world" >>= HasSubstr("llo"));

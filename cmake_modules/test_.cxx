@@ -44,7 +44,6 @@ std::vector<std::any> parameters;
 struct Info {
   char const *file;
   int line;
-  char const *suite_name;
   char const *test_name;
 };
 
@@ -55,22 +54,21 @@ static void body(void const *p) {
   Test::body(*static_cast<Parameter const *>(p));
 }
 
+struct DefaultSuiteState {
+  void setup() {}
+  void teardown() {}
+};
+export DefaultSuiteState suite_(...) { return {}; }
+
 export template <typename S>
 struct Registrar {
-  using SuiteState = std::conditional_t<Complete<S>, S, int>;
-
-  static SuiteState *const suite_state() {
-    alignas(SuiteState) static char storage[sizeof(SuiteState)];
-    return std::launder(reinterpret_cast<SuiteState *>(&storage));
-  }
-
   struct Fixture : testing::Test {
-    static void SetUpTestSuite() { new (suite_state()) SuiteState{}; }
-    static void TearDownTestSuite() { suite_state()->~SuiteState(); }
+    static void SetUpTestSuite() { S{}.setup(); }
+    static void TearDownTestSuite() { S{}.teardown(); }
+    void TestBody() override { _body(_parameter); }
 
     Body *_body;
     void const *_parameter;
-    void TestBody() override { _body(_parameter); }
 
     template <typename Test, typename Parameter>
     Fixture(Test *, Parameter const *p) : _body{&body<Test, Parameter>}, _parameter{p} {}
@@ -78,10 +76,19 @@ struct Registrar {
 
   void register_one(auto *test, Info info, auto parameter, int i = -1,
                     std::string type_name = "") {
+    static_assert(std::is_empty_v<S>);
     constexpr bool HAS_PARAMETER =
         not std::is_same_v<decltype(parameter), std::nullptr_t>;
 
-    auto [file, line, suite_name, test_name] = info;
+    auto [file, line, test_name] = info;
+
+    std::string suite_name{file};
+    if (auto i = suite_name.find_last_of("\\/"); i != std::string::npos) {
+      suite_name = suite_name.substr(i + 1);
+    }
+    if (auto i = suite_name.find_first_of('.'); i != std::string::npos) {
+      suite_name = suite_name.substr(0, i);
+    }
 
     char const *type_param = nullptr;
     char const *value_param = nullptr;
@@ -99,8 +106,8 @@ struct Registrar {
       name += "/" + PrintToString(*parameter);
       value_param = name.c_str() + old_size + 1;
     }
-    testing::RegisterTest(suite_name, name.c_str(), type_param, value_param, file, line,
-                          [test, parameter] {
+    testing::RegisterTest(suite_name.c_str(), name.c_str(), type_param, value_param, file,
+                          line, [test, parameter] {
                             if constexpr (HAS_PARAMETER) {
                               return new Fixture{test, parameter};
                             } else {
@@ -429,8 +436,4 @@ struct Matcher {
 
   void DescribeTo(std::ostream *os) const { describe(*os); }
   void DescribeNegationTo(std::ostream *os) const { describe_negation(*os); }
-};
-
-export struct DontTerminateIfDestructionThrows {
-  ~DontTerminateIfDestructionThrows() noexcept(false) {}
 };
