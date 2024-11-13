@@ -649,27 +649,27 @@ class PutDirective(SphinxDirective):
 
 def setup(app: Sphinx) -> ExtensionMetadata:
     app.add_config_value(
-        "trike_files",
-        [],
-        "env",
-        types=[list[Path]],
+        name="trike_files",
         description="All C++ sources which will be scanned for ///",
+        default=[],
+        rebuild="env",
+        types=[list[Path]],
     )
 
     app.add_config_value(
-        "trike_clang_args",
-        [],
-        "env",
-        types=[list[str], Mapping[Path, str]],
+        name="trike_clang_args",
         description="Arguments which will be passed to clang (or per-file mapping)",
+        default=[],
+        rebuild="env",
+        types=[list[str], Mapping[Path, str]],
     )
 
-    # FIXME an unpickleable value causes the environment to *never* be reloadable
     app.add_config_value(
-        "trike_get_uri",
-        None,
-        "env",
+        name="trike_get_uri",
         description="A mapping from scanned C++ source to uri",
+        default=None,
+        rebuild="",
+        # really this should be rebuild="env", but functions are not pickleable
     )
 
     app.connect("builder-inited", _builder_inited)

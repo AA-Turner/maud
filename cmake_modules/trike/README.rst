@@ -133,6 +133,19 @@ The macro will now be referencable as ``ASSERT(condition...)`` (Lookup of
 be unchanged. In order to be recognized, the explicit directive must be the
 first line of the ``///``, and there must be no space in the prefix ``///..``
 
+Alternatively, you might want to hide a
+`CRTP <https://en.cppreference.com/w/cpp/language/crtp>`_
+base class from documentation:
+
+.. code-block:: c++
+
+  ///.. cpp:class:: template <typename T> Stream<T>
+  template <typename T>
+  class Stream<T> : impl::StreamMixin<T>
+
+... that base class doesn't appear in the explicit directive, so sphinx will
+never know about it.
+
 Configuration
 -------------
 

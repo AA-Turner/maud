@@ -72,7 +72,6 @@ extlinks = {
     "sphinx": ("https://www.sphinx-doc.org/en/master/usage/%s", None),
 }
 
-# TODO get trike files from cmake
 trike_files = [
     *maud.cache.CMAKE_SOURCE_DIR.glob("*.cxx"),
     *maud.cache.CMAKE_SOURCE_DIR.glob("cmake_modules/*.cxx"),
