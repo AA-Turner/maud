@@ -1,6 +1,3 @@
-#define GTEST_STRINGIFY_HELPER_(name, ...) #name
-#define GTEST_STRINGIFY_(...) GTEST_STRINGIFY_HELPER_(__VA_ARGS__, )
-
 ///.. c:macro:: TEST_(case_name, parameters...)
 ///
 /// Defines and registers a test case with optional parameters.
@@ -48,15 +45,15 @@
 /// and incorporated into the test case’s total name along with case_name and the
 /// suite’s name to make it accessible to
 /// :gtest:`filtering <advanced.html#running-a-subset-of-the-tests>`.
-#define TEST_(case_name, ...)                                                       \
-  struct case_name : Registrar<decltype(::suite_(nullptr))> {                       \
-    case_name() {                                                                   \
-      register_(this, {__FILE__, __LINE__, #case_name} __VA_OPT__(, ) __VA_ARGS__); \
-    }                                                                               \
-    template <typename Parameter>                                                   \
-    static void body(Parameter const &parameter);                                   \
-  } case_name;                                                                      \
-  template <typename Parameter>                                                     \
+#define TEST_(case_name, ...)                                                 \
+  struct case_name : Registrar<struct case_name> {                            \
+    case_name() {                                                             \
+      register_({__FILE__, __LINE__, #case_name} __VA_OPT__(, ) __VA_ARGS__); \
+    }                                                                         \
+    template <typename Parameter>                                             \
+    static void body(Parameter const &parameter);                             \
+  } case_name;                                                                \
+  template <typename Parameter>                                               \
   void case_name::body(Parameter const &parameter)
 
 ///.. c:macro:: EXPECT_(condition...)
@@ -106,40 +103,3 @@
     __FILE__, __LINE__,                                                               \
         (::expect_helper::Begin{} <= __VA_ARGS__, ::expect_helper::End{#__VA_ARGS__}) \
   }
-
-/// Define shared suite resources.
-///
-/// Defines an empty ``struct`` whose ``setup()`` and ``teardown()`` member functions will
-/// be invoked once before any cases in the suite are run and once after no more cases
-/// from the suite will run, respectively. (These correspond
-// clang-format off
-/// :gtest:`SetUpTestSuite/TearDownTestSuite. <advanced.html#sharing-resources-between-tests-in-the-same-test-suite>`
-// clang-format on
-/// )
-///
-/// This should be used if a resource is too expensive to set up in each test case
-/// and management of the shared resource might fail. ``SUITE_`` functions have access
-/// to :c:macro:`EXPECT_`, so any failures in setup or teardown can be exposed as
-/// a failure of the test suite.
-///
-/// .. code-block::
-///
-///   ServerHandle server_handle;
-///
-///   SUITE_ {
-///     void setup() {
-///       server_handle.connect_to("localhost", 7890);
-///       EXPECT_(server_handle.is_connected());
-///     }
-///     void teardown() {
-///       server_handle.orderly_shutdown();
-///       EXPECT_(not server_handle.is_connected());
-///     }
-///   };
-///
-/// If it is provided it must precede all :c:macro:`TEST_`
-/// definitions (this is checked at runtime).
-#define SUITE_               \
-  struct SuiteState;         \
-  SuiteState suite_(void *); \
-  struct SuiteState

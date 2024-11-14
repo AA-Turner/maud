@@ -144,6 +144,7 @@ file(
   if(BUILD_TESTING AND NOT COMMAND \"maud_add_test\")
     # TODO fallback to FetchContent
     find_package(GTest)
+    include_directories(\${GTEST_INCLUDE_DIRS})
   endif()
 
   _maud_in2()

@@ -17,12 +17,13 @@ one test suite is produced for each C++ source which includes
 the special module declaration ``module test_``. Each test suite
 is compiled into an executable target named ``test_.${SUITE_NAME}``.
 
-In a suite source file, three macros are included in the predefines
+In a suite source file, two macros are included in the predefines
 buffer (an explicit ``#include`` is unnecessary):
 test cases are defined with :c:macro:`TEST_`,
 and in a test case assertions are made with :c:macro:`EXPECT_`.
-:c:macro:`SUITE_` can optionally be used to
-specify resources which should be shared across the suite.
+
+GTest is added to the include path, so explicit
+``#include <gtest/gtest.h>`` is always available if necessary.
 
 .. code-block:: c++
 
@@ -67,8 +68,6 @@ Unit test API
 
 .. trike-macro:: EXPECT_(condition...)
 
-.. trike-macro:: SUITE_
-
 .. cpp:module:: test_
 
 .. trike-class:: template <typename Match, \
@@ -76,16 +75,18 @@ Unit test API
                            typename DescribeNegation> \
                  Matcher
 
-.. FIXME GTest is not easily includable yet
+.. TODO document Main or whatever helper, setting up state in main()
 
-GTest is added to the include path for the suite, so explicit
-``#include <gtest/gtest.h>`` is always available if necessary.
+Custom ``main()``
+=================
+
 Each suite is linked to ``gtest_main``. Since that defines ``main``
 as a weak symbol, a custom main function can be written in a
-test suite. To write a custom main function for all test suites,
-write an interface unit with ``export module test_:main;`` and
-that will replace ``gtest_main``.
+test suite and it will override ``gtest_main``'s default.
 
+To write a custom main function for all test executables,
+write an interface unit with ``export module test_:main;`` and
+that will be linked to each test executable instead of ``gtest_main``.
 
 Overriding ``test_``
 ====================

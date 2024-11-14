@@ -236,20 +236,6 @@ unit testing:
 - cmake --install .build --prefix ../usr --config Debug
 - exists: .build/Debug/test_.basics
 - does not exist: ../usr/bin/test_.basics
-- write: suite_management.cxx
-  contents: |
-    #include <string>
-    import test_;
-
-    std::string str;
-
-    SUITE_ {
-      void setup() { str = "yo"; }
-      void teardown() { str = ""; }
-    };
-    TEST_(str_is_yo) { EXPECT_(str == "yo"); }
-- cmake --build .build --config Debug
-- ctest --test-dir .build --output-on-failure -C Debug
 
 
 disabling unit testing:
@@ -278,18 +264,12 @@ unit testing main:
       testing::InitGoogleTest(&argc, argv);
       return RUN_ALL_TESTS();
     }
-- write: foo_check.cxx
+- write: foo.cxx
   contents: |
     import test_;
     TEST_(check_foo_is_999) {
       EXPECT_(foo == 999);
     }
-- write: allow_preprocessing_scan.cmake
-  contents: |
-    #add_executable(test_.foo) # FIXME this isn't working as in use_find_package
-    find_package(GTest)
-    get_target_property(i GTest::gtest INTERFACE_INCLUDE_DIRECTORIES)
-    include_directories(${i})
 - maud --log-level=VERBOSE
 - ctest --test-dir .build --output-on-failure -C Debug
 

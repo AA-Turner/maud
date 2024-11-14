@@ -172,7 +172,7 @@ maud_defer(
 TODO: consolidate tests
 -----------------------
 
-By default we produce 1:1:1 test source:executable:test suite.
+By default we produce 1:1:1 test source:test suite:executable.
 In a larger project with many tests, it can be useful to consolidate
 suites into fewer executables in order to save link time when the
 goal is simply to build and run all of them. Therefore we should have an
@@ -180,6 +180,19 @@ option which defaults to suite-per-executable and can be enabled to
 redistribute test sources into larger test executables (which are named
 `test-executable-1` etc but ctest uses `--gtest_filter` so that we can
 still see individual suite names).
+
+Maybe this could be done with a directory; we still have 1:1 source:suite,
+but in a directory named `test_.${name}/` we link the suites into the
+executable `test_.${name}`.
+
+Alternatively, this could be a distinct special module like
+`import test_.suite_of.${name};` and we collect all suites of `${name}`
+into the executable `test_.${name}`.
+
+... there really isn't any point to
+[`SUITE_`](https://github.com/bkietz/maud/commit/1ae8031a0a1a94d344d36ad52b0bba5ac3002293)
+until this is available; as long as there is only one suite per executable you might
+as well do setup/teardown in a custom `main()`.
 
 
 TODO: cmake compendium

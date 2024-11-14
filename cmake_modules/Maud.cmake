@@ -525,11 +525,6 @@ function(_maud_add_test source_file out_target_name)
   endif()
 
   cmake_path(GET source_file STEM name)
-  set_source_files_properties(
-    "${source_file}"
-    PROPERTIES
-    COMPILE_DEFINITIONS SUITE_NAME=${name}
-  )
   set(${out_target_name} "test_.${name}" PARENT_SCOPE)
 
   if(NOT TARGET "test_.${name}")
@@ -663,15 +658,15 @@ function(_maud_finalize_targets)
     endif()
     print_target_sources(${target})
 
-    if(TEST ${target})
-      if(NOT COMMAND "maud_add_test")
-        target_link_libraries(${target} PRIVATE GTest::gtest_main)
-      endif()
+    if(TEST ${target} AND NOT COMMAND "maud_add_test")
       if(_MAUD_TEST_MAIN)
         set(test_main "${_MAUD_TEST_MAIN}")
+        target_link_libraries(${target} PRIVATE GTest::gtest)
       else()
         set(test_main "${_MAUD_SELF_DIR}/test_main_.cxx")
+        target_link_libraries(${target} PRIVATE GTest::gtest_main)
       endif()
+
       target_sources(
         ${target}
         PRIVATE
