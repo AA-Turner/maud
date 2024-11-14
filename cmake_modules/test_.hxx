@@ -110,8 +110,8 @@
 /// Define shared suite resources.
 ///
 /// Defines an empty ``struct`` whose ``setup()`` and ``teardown()`` member functions will
-/// be invoked once before any cases in the suite are run and once after no more cases from
-/// the suite will run, respectively. (These correspond
+/// be invoked once before any cases in the suite are run and once after no more cases
+/// from the suite will run, respectively. (These correspond
 // clang-format off
 /// :gtest:`SetUpTestSuite/TearDownTestSuite. <advanced.html#sharing-resources-between-tests-in-the-same-test-suite>`
 // clang-format on
