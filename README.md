@@ -23,11 +23,18 @@ hello world!
 ```
 
 Maud bootstraps a cmake build directory with excellent defaults and batteries
-included. Maud makes building C++20 modules straightforward. Other
-features include performant and expressive globbing, first class support for
-generated files, inference of compilation/link/test targets from source files,
-built-in targets for rendering gorgeous documentation, expanded capabilities
-for declaring and resolving build options, and more.
+included. Maud makes building with C++20 modules straightforward. Other
+features include performant and expressive
+[globbing](https://bkietz.github.io/maud/globbing),
+first class support for
+[generated files](https://bkietz.github.io/maud/#generated-files-blurb),
+inference of
+[compilation/link/test targets](https://bkietz.github.io/maud/modules#module-library)
+from source files,
+built-in targets for rendering
+[gorgeous documentation](https://bkietz.github.io/maud/documentation),
+expanded capabilities for declaring and resolving
+[build options](https://bkietz.github.io/maud/options), and more.
 
 Getting Started
 ---------------

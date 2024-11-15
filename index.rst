@@ -109,6 +109,9 @@ Features
         ADD_COMPILE_DEFINITIONS
       )
 
+
+.. _generated files blurb:
+
 Built-in support for generated files
     A common source of cmake boilerplate is wiring up rendering of template files,
     running schema compilers, and otherwise generating code. ``Maud`` provides a
