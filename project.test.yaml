@@ -215,14 +215,15 @@ unit testing:
       EXPECT_(*ptr == three);
       EXPECT_("hello world" >>= HasSubstr("llo"));
     }
+    Matcher IsEven{
+      .match = [](auto n, auto &) { return n % 2 == 0; },
+      .description = [](auto &os, bool negated) {
+        os << (negated ? "isn't" : "is") << " even";
+      },
+    };
     TEST_(custom_matcher) {
-      Matcher NotNull{
-        .match = [](auto const &ptr, auto &) { return ptr != nullptr; },
-        .describe = [](auto &os) { os << "is not NULL"; },
-        .describe_negation = [](auto &os) { os << "is NULL"; },
-      };
-      int i;
-      EXPECT_(&i >>= NotNull);
+      int i = 3;
+      EXPECT_(i >>= Not(IsEven));
     }
     TEST_(parameterized, {111, 234}) {
       EXPECT_(parameter == parameter);

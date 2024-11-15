@@ -18,6 +18,8 @@ using namespace testing;
 export template <typename T>
 std::string const type_name = testing::internal::GetTypeName<T>();
 
+export using testing::PrintToString;
+
 export template <>
 auto const type_name<std::string> = "std::string";
 
@@ -380,31 +382,69 @@ export using testing::AnyOfArray;
 export using testing::Not;
 export using testing::Conditional;
 
+export using testing::DescribeMatcher;
+
+export template <typename T, typename M>
+bool ExplainMatchResult(M matcher, T const &value, std::ostream &os) {
+  testing::internal::StreamMatchResultListener listener{&os};
+  return testing::SafeMatcherCast<T const &>(matcher).MatchAndExplain(value, &listener);
+}
+
+template <typename Match>
+struct DefaultDescription {
+  void operator()(std::ostream &os, bool negated) const {
+    os << (negated ? "not (" : "(") << type_name<Match> << ")";
+  }
+};
+
 /// Helper for constructing matchers from lambdas.
 ///
-/// For example, to define a matcher which checks for equality with nullptr:
+/// Matchers can be used with :c:macro:`EXPECT_` using ``operator>>=``.
+///
+/// For example, to define a matcher which checks whether a number is even:
 ///
 /// .. code-block::
 ///
-///   Matcher constexpr NotNull{
-///     .match = [](auto const &ptr, auto &) { return ptr != nullptr; },
-///     .describe = [](auto &os) { os << "is not NULL"; },
-///     .describe_negation = [](auto &os) { os << "is NULL"; },
+///   Matcher IsEven = [](auto n, std::ostream &os) {
+///     return (n % 2) == 0;
 ///   };
 ///
-/// Matchers can then be used with :c:macro:`EXPECT_` using ``operator>>=``.
-export template <typename Match, typename Describe, typename DescribeNegation>
+/// To parameterize a matcher, define a function which returns a matcher
+/// with the parameters in closure:
+///
+/// .. code-block::
+///
+///   auto IsDivisibleBy(auto divisor) {
+///     return Matcher{[=](auto n, std::ostream &os) {
+///       os << "where the remainder is " << (n % divisor);
+///       return (n % divisor) == 0;
+///     }};
+///   }
+///
+/// Description of the matcher can be cusotmized with another lambda:
+///
+/// .. code-block::
+///
+///   auto BarPlusBazEq(int n) {
+///     return Matcher{
+///       .match = [=](Foo f, std::ostream &os) { return f.bar() + f.baz() == n; },
+///       .description = [=](std::ostream &os, bool negated) {
+///         os << "bar() + baz() ";
+///         os << (negated ? " does not equal " : " equals ") << n;
+///       },
+///     };
+///   }
+///
+/// Frequently, a lambda is sufficient for constructing a custom matcher.
+/// However, it's worth noting that defining a
+/// :gtest:`custom matcher class <gmock_cook_book.html#CustomMatcherClass>`
+/// is not prohibitively complex.
+export template <typename Match, typename Description = DefaultDescription<Match>>
 struct Matcher {
   Match match;
-  Describe describe;
-  DescribeNegation describe_negation;
-
+  Description description;
   using is_gtest_matcher = void;
-
-  bool MatchAndExplain(auto const &arg, std::ostream *os) const {
-    return match(arg, *os);
-  }
-
-  void DescribeTo(std::ostream *os) const { describe(*os); }
-  void DescribeNegationTo(std::ostream *os) const { describe_negation(*os); }
+  bool MatchAndExplain(auto const &x, std::ostream *os) const { return match(x, *os); }
+  void DescribeTo(std::ostream *os) const { description(*os, false); }
+  void DescribeNegationTo(std::ostream *os) const { description(*os, true); }
 };

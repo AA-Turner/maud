@@ -64,7 +64,7 @@ extensions += ["sphinx_inline_tabs"]
 extensions += ["sphinx.ext.extlinks"]
 extlinks_detect_hardcoded_links = True
 extlinks = {
-    "cxx20": ("https://timsong-cpp.github.io/cppwp/n4868/%s", "c++20:%s"),
+    "cxx20": ("https://timsong-cpp.github.io/cppwp/n4868/%s", "C++20:%s"),
     # TODO this should be intersphinx instead
     "cmake": ("https://cmake.org/cmake/help/latest/%s", None),
     "mastering-cmake": ("https://cmake.org/cmake/help/book/mastering-cmake/chapter/%s", None),

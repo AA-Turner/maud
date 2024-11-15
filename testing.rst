@@ -71,8 +71,7 @@ Unit test API
 .. cpp:module:: test_
 
 .. trike-class:: template <typename Match, \
-                           typename Describe, \
-                           typename DescribeNegation> \
+                           typename Description = DefaultDescription<Match>> \
                  Matcher
 
 .. TODO document Main or whatever helper, setting up state in main()
