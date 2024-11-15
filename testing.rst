@@ -1,3 +1,5 @@
+.. _unit tests:
+
 Unit tests
 ----------
 
@@ -14,8 +16,8 @@ usage differs.
 
 Instead of defining test suites explicitly with classes,
 one test suite is produced for each C++ source which includes
-the special module declaration ``module test_``. Each test suite
-is compiled into an executable target named ``test_.${SUITE_NAME}``.
+the special import declaration ``import test_``. Each test suite
+is compiled into an executable target named ``test_.${STEM}``.
 
 In a suite source file, two macros are included in the predefines
 buffer (an explicit ``#include`` is unnecessary):
@@ -27,7 +29,7 @@ GTest is added to the include path, so explicit
 
 .. code-block:: c++
 
-  module test_;
+  import test_;
 
   TEST_(basic) {
     int three = 3, five = 5;

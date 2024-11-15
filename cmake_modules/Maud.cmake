@@ -456,7 +456,12 @@ function(_maud_scan source_file)
   message(VERBOSE "  attaching to ${target_name}")
 
   set_property(TARGET ${target_name} APPEND PROPERTY MAUD_IMPORTS "${imports}")
-  set_target_properties(${target_name} PROPERTIES MAUD_SCANNED ON)
+  set_target_properties(
+    ${target_name}
+    PROPERTIES
+    MAUD_SCANNED ON
+    MAUD_MODULE "${module}"
+  )
   target_compile_features(
     ${target_name}
     PUBLIC
@@ -533,7 +538,7 @@ function(_maud_add_test source_file out_target_name)
   add_test(NAME test_.${name} COMMAND $<TARGET_FILE:test_.${name}> --gtest_brief=1)
   target_sources(
     test_.${name}
-    PRIVATE
+    PUBLIC
     FILE_SET module_providers
     TYPE CXX_MODULES
     ${_MAUD_BASE_DIRS}
@@ -542,7 +547,6 @@ function(_maud_add_test source_file out_target_name)
   set_target_properties(
     test_.${name}
     PROPERTIES
-    MAUD_INTERFACE "${_MAUD_SELF_DIR}/test_.cxx"
     COMPILE_OPTIONS "${_MAUD_INCLUDE} ${_MAUD_SELF_DIR}/test_.hxx"
   )
 endfunction()
@@ -611,6 +615,10 @@ function(_maud_finalize_targets)
     if(NOT imports)
       set(imports "")
     endif()
+    get_target_property(module ${target} MAUD_MODULE)
+    if(module AND target_type STREQUAL "EXECUTABLE")
+      list(APPEND imports "${module}")
+    endif()
     message(VERBOSE "  IMPORTS: ${imports}")
 
     # Link targets to imported modules
@@ -629,10 +637,9 @@ function(_maud_finalize_targets)
     endforeach()
 
     get_target_property(interface ${target} MAUD_INTERFACE)
-    if(NOT interface)
+    if(NOT interface AND NOT TEST ${target})
       if(target_type STREQUAL "EXECUTABLE")
         set(interface "${_MAUD_SELF_DIR}/executable.cxx")
-        set(source_access PRIVATE)
       else()
         get_target_property(src ${target} MAUD_INTERFACE_PARTITIONS)
         set(interface "${MAUD_DIR}/injected/${target}.cxx")
@@ -644,18 +651,18 @@ function(_maud_finalize_targets)
           PROPERTIES
           MAUD_TYPE INTERFACE
         )
-        set(source_access PUBLIC)
         message(VERBOSE "  No primary interface supplied, injecting ${interface}")
       endif()
       target_sources(
         ${target}
-        ${source_access}
+        PUBLIC
         FILE_SET module_providers
         TYPE CXX_MODULES
         ${_MAUD_BASE_DIRS}
         FILES "${interface}"
       )
     endif()
+
     print_target_sources(${target})
 
     if(TEST ${target} AND NOT COMMAND "maud_add_test")
@@ -669,7 +676,7 @@ function(_maud_finalize_targets)
 
       target_sources(
         ${target}
-        PRIVATE
+        PUBLIC
         FILE_SET module_providers
         TYPE CXX_MODULES
         BASE_DIRS ${_MAUD_BASE_DIRS}

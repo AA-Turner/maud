@@ -20,3 +20,10 @@ Zen
   :members:
 
   FIXME remove this when I figure out how to test sphinx better
+
+
+FIXME where should this live
+
+Directories named ``include`` are globbed up and added to ``INCLUDE_DIRECTORIES``,
+so ``$project_root/subtool/include/subtool/foo.hxx`` can be included with
+``#include "subtool/foo.hxx"`` from any header or source.

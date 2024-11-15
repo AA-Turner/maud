@@ -253,6 +253,24 @@ disabling unit testing:
 - maud -DBUILD_TESTING=OFF
 
 
+internal unit testing:
+- write: foo.cxx
+  contents: |
+    export module foo:interface;
+    // not exported!
+    int foo_internal() { return 3; }
+- write: internal.test.cxx
+  contents: |
+    module foo:some_test;
+    import :interface;
+    import test_;
+
+    TEST_(can_access_internal) {
+      EXPECT_(foo_internal() == 3);
+    }
+- maud --log-level=VERBOSE
+
+
 unit testing main:
 - write: test_main.cxx
   contents: |
