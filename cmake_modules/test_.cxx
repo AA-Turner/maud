@@ -15,16 +15,27 @@ export import :main;
 
 using namespace testing;
 
+///.. cpp:var:: template <typename T> std::string const type_name
+///
+/// A string representation of a type's name.
+///
+/// By default this is a best effort demangling from type_info.
+/// This template can be specialized to override the default string.
+///
+/// .. code-block::
+///
+///   template <>
+///   std::string const type_name<Set<int>> = "Selection";
 export template <typename T>
 std::string const type_name = testing::internal::GetTypeName<T>();
 
 export using testing::PrintToString;
 
 export template <>
-auto const type_name<std::string> = "std::string";
+std::string const type_name<std::string> = "std::string";
 
 export template <>
-auto const type_name<std::string_view> = "std::string_view";
+std::string const type_name<std::string_view> = "std::string_view";
 
 export struct Main {
   Main(int &argc, char **argv) { InitGoogleTest(&argc, argv); }
@@ -421,7 +432,11 @@ struct DefaultDescription {
 ///     }};
 ///   }
 ///
-/// Description of the matcher can be cusotmized with another lambda:
+/// On failed expectations, matchers output a description of the way
+/// matching failed. By default, this uses the :var:`type_name\<T>` of
+/// the match lambda (which is usually something unique but uninformative,
+/// like ``"$_1"``).
+/// Description of the matcher can be customized with another lambda:
 ///
 /// .. code-block::
 ///
@@ -429,7 +444,7 @@ struct DefaultDescription {
 ///     return Matcher{
 ///       .match = [=](Foo f, std::ostream &os) { return f.bar() + f.baz() == n; },
 ///       .description = [=](std::ostream &os, bool negated) {
-///         os << "bar() + baz() ";
+///         os << "bar() + baz()";
 ///         os << (negated ? " does not equal " : " equals ") << n;
 ///       },
 ///     };

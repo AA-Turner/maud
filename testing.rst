@@ -76,6 +76,8 @@ Unit test API
                            typename Description = DefaultDescription<Match>> \
                  Matcher
 
+.. trike-var:: template <typename T> std::string const type_name
+
 .. TODO document Main or whatever helper, setting up state in main()
 
 Custom ``main()``

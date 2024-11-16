@@ -139,9 +139,9 @@ base class from documentation:
 
 .. code-block:: c++
 
-  ///.. cpp:class:: template <typename T> Stream<T>
+  ///.. cpp:class:: template <typename T> Stream
   template <typename T>
-  class Stream<T> : impl::StreamMixin<T>
+  class Stream : impl::StreamMixin<T>
 
 ... that base class doesn't appear in the explicit directive, so sphinx will
 never know about it.
